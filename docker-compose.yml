@@ -1,0 +1,114 @@
+name: bigdata-ecommerce
+
+# Chaque service appartient a un profil. Aucun service ne demarre sans profil actif :
+#   docker compose --profile oracle    up -d
+#   docker compose --profile cassandra up -d
+#   docker compose --profile elastic   up -d
+# Une seule phase est allumee a la fois (contrainte 16 Go / GitHub Codespaces).
+# La persistance est assuree par des volumes nommes : eteindre une phase ne perd pas les donnees.
+
+services:
+
+  # ---------------------------------------------------------------- PHASE 1
+  # Source SQL relationnelle normalisee (3NF).
+  oracle:
+    image: gvenzl/oracle-free:23-slim-faststart
+    container_name: bde-oracle
+    profiles: ["oracle"]
+    shm_size: 1g
+    environment:
+      ORACLE_PASSWORD: ${ORACLE_SYS_PASSWORD:-oracle}
+      APP_USER: ${ORACLE_USER:-ecom}
+      APP_USER_PASSWORD: ${ORACLE_PASSWORD:-ecom}
+    ports:
+      - "${ORACLE_PORT:-1521}:1521"
+    volumes:
+      - oracle_data:/opt/oracle/oradata
+    mem_limit: 4g
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 90s
+
+  # ---------------------------------------------------------------- PHASE 2
+  # Cible NoSQL orientee colonnes, alimentee par le JSON denormalise.
+  cassandra:
+    image: cassandra:5.0
+    container_name: bde-cassandra
+    profiles: ["cassandra"]
+    environment:
+      CASSANDRA_CLUSTER_NAME: ${CASSANDRA_CLUSTER:-bigdata-ecommerce}
+      CASSANDRA_DC: datacenter1
+      CASSANDRA_ENDPOINT_SNITCH: GossipingPropertyFileSnitch
+      # Heap bornee : la JVM Cassandra prend sinon 1/4 de la RAM de la machine.
+      MAX_HEAP_SIZE: 1G
+      HEAP_NEWSIZE: 256M
+    ports:
+      - "${CASSANDRA_PORT:-9042}:9042"
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+    mem_limit: 3g
+    healthcheck:
+      test: ["CMD-SHELL", "nodetool status | grep -q '^UN'"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+
+  # ---------------------------------------------------------------- PHASE 4
+  # Moteur d'indexation + couche de visualisation.
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: bde-elasticsearch
+    profiles: ["elastic"]
+    environment:
+      discovery.type: single-node
+      # Cluster mono-noeud de dev : pas de TLS ni d'authentification a gerer.
+      xpack.security.enabled: "false"
+      xpack.security.enrollment.enabled: "false"
+      ES_JAVA_OPTS: "-Xms1g -Xmx1g"
+      bootstrap.memory_lock: "true"
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      nofile: { soft: 65536, hard: 65536 }
+    ports:
+      - "${ES_PORT:-9200}:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    mem_limit: 2500m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"'"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.3
+    container_name: bde-kibana
+    profiles: ["elastic"]
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      NODE_OPTIONS: "--max-old-space-size=1024"
+    ports:
+      - "${KIBANA_PORT:-5601}:5601"
+    volumes:
+      - kibana_data:/usr/share/kibana/data
+    mem_limit: 2g
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:5601/api/status | grep -q '\"level\":\"available\"'"]
+      interval: 15s
+      timeout: 10s
+      retries: 40
+      start_period: 60s
+
+volumes:
+  oracle_data:
+  cassandra_data:
+  es_data:
+  kibana_data:
