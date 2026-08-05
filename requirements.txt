@@ -1,0 +1,18 @@
+# Phase 0 : configuration
+python-dotenv==1.0.1
+
+# Phase 1 : Oracle (mode "thin" : aucun client Oracle natif a installer)
+oracledb==2.5.1
+Faker==30.8.2
+
+# Phase 2 : Cassandra
+cassandra-driver==3.29.2
+
+# Phase 3 : Spark / Parquet (execution locale, pas de conteneur Spark)
+pyspark==3.5.3
+pandas==2.2.3
+pyarrow==17.0.0
+
+# Phase 4 : Elasticsearch / Kibana
+elasticsearch==8.15.1
+requests==2.32.3
