@@ -24,6 +24,13 @@ REVENUE_STATUSES = ["PAID", "SHIPPED", "DELIVERED"]
 
 MONEY = "decimal(14,2)"
 
+# Libelles des jours en clair. On les fabrique depuis `dayofweek`, qui renvoie
+# un entier, plutot que par `date_format(..., "EEEE")`, dont le resultat depend
+# de la locale de la JVM : le meme code produirait "Tuesday" ou "mardi" selon la
+# machine, et les agregations Kibana changeraient de libelle d'un poste a
+# l'autre. dayofweek numerote a partir du dimanche.
+JOURS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"]
+
 
 def enrich_dates(df: DataFrame) -> DataFrame:
     """Derive les colonnes calendaires depuis l'horodatage de commande.
@@ -37,7 +44,10 @@ def enrich_dates(df: DataFrame) -> DataFrame:
         .withColumn("order_year", F.year("order_date"))
         .withColumn("order_month", F.month("order_date"))
         .withColumn("order_day", F.dayofmonth("order_date"))
-        .withColumn("order_dow", F.date_format("order_date", "EEEE"))
+        .withColumn(
+            "order_dow",
+            F.element_at(F.array(*[F.lit(jour) for jour in JOURS]), F.dayofweek("order_date")),
+        )
         .withColumn("order_hour", F.hour("order_date"))
         .withColumn("order_date_day", F.to_date("order_date"))
     )

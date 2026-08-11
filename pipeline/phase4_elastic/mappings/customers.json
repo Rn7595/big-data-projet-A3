@@ -1,0 +1,32 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "refresh_interval": "5s"
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "customer_id":        { "type": "integer" },
+      "loyalty_tier":       { "type": "keyword" },
+      "country_code":       { "type": "keyword" },
+      "country_name":       { "type": "keyword" },
+      "region":             { "type": "keyword" },
+      "city":               { "type": "keyword" },
+
+      "premiere_commande":  { "type": "date", "format": "yyyy-MM-dd" },
+      "derniere_commande":  { "type": "date", "format": "yyyy-MM-dd" },
+      "recence_jours":      { "type": "integer" },
+      "frequence":          { "type": "integer" },
+      "montant":            { "type": "scaled_float", "scaling_factor": 100 },
+      "panier_moyen":       { "type": "scaled_float", "scaling_factor": 100 },
+      "nb_articles":        { "type": "integer" },
+
+      "score_recence":      { "type": "byte" },
+      "score_frequence":    { "type": "byte" },
+      "score_montant":      { "type": "byte" },
+      "score_rfm":          { "type": "byte" },
+      "segment":            { "type": "keyword" }
+    }
+  }
+}

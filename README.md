@@ -83,3 +83,4 @@ tests/       controles de coherence entre les phases
 - [Modele relationnel Oracle](docs/02-modele-oracle.md)
 - [Modele Cassandra et denormalisation](docs/03-modele-cassandra.md)
 - [Formatage Spark et Parquet](docs/04-spark-parquet.md)
+- [Indexation Elasticsearch et dashboard Kibana](docs/05-elasticsearch-kibana.md)
