@@ -127,3 +127,23 @@ DISCOUNT_WEIGHTS: dict[float, float] = {0: 0.80, 5: 0.07, 10: 0.06, 15: 0.04, 20
 
 FREE_SHIPPING_THRESHOLD = 60.0
 SHIPPING_FEE = 4.90
+
+# Exposants pilotant le tirage des produits vendus.
+#
+# RANK : loi de puissance sur un rang aleatoire, qui produit la concentration
+#   classique du commerce (une minorite de references fait la majorite des
+#   ventes).
+#
+# PRICE : penalite appliquee au prix. Sans elle, un velo a 2 000 EUR serait
+#   vendu aussi souvent qu'un stylo a 3 EUR, et le panier moyen atteindrait
+#   plusieurs centaines d'euros -- un magasin qui ne vendrait que des
+#   televiseurs. Dans un catalogue reel, les volumes se concentrent sur les
+#   articles bon marche.
+#
+# Les deux valeurs sont calibrees ensemble : un panier median d'environ
+# 60 EUR, et une concentration ou 20 % des references portent 80 % des
+# lignes vendues. Augmenter la penalite de prix seule ferait tomber tout le
+# volume sur les articles les moins chers, avec une concentration de 95 %
+# sans rapport avec un catalogue reel.
+PRODUCT_RANK_EXPONENT = 0.60
+PRODUCT_PRICE_EXPONENT = 1.15

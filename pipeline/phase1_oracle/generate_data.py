@@ -346,9 +346,8 @@ class DataGenerator:
         customer_ids = list(signup_dates.keys())
         customer_picker = self._pareto_picker(customer_ids, exponent=1.15)
 
-        product_ids = [row[0] for row in products]
         catalog_price = {row[0]: row[5] for row in products}
-        product_picker = self._pareto_picker(product_ids, exponent=1.10)
+        product_picker = self._product_picker(products)
 
         recent_threshold = datetime.combine(self.end_date - timedelta(days=12), datetime.min.time())
 
@@ -411,6 +410,38 @@ class DataGenerator:
                 shipping,
             ))
         return order_rows, item_rows
+
+    def _product_picker(self, products: Sequence[tuple]):
+        """Tireur de produits combinant concentration des ventes et effet du prix.
+
+        Deux facteurs se multiplient :
+
+          * un rang aleatoire eleve a une puissance, qui reproduit la
+            concentration du commerce : quelques references font l'essentiel
+            des ventes ;
+          * l'inverse du prix, qui reproduit le fait qu'on vend beaucoup
+            d'articles bon marche et peu d'articles couteux.
+
+        Sans le second facteur, tous les produits se vendraient au meme rythme
+        quel que soit leur prix, et le panier moyen serait celui d'un magasin
+        ne vendant que du haut de gamme.
+        """
+        ordered = list(products)
+        self.rng.shuffle(ordered)
+        weights = [
+            (1.0 / (rank ** ref.PRODUCT_RANK_EXPONENT))
+            * (1.0 / (float(row[5]) ** ref.PRODUCT_PRICE_EXPONENT))
+            for rank, row in enumerate(ordered, start=1)
+        ]
+        identifiers = [row[0] for row in ordered]
+        cumulative = list(accumulate(weights))
+
+        def pick(count: int) -> list:
+            if count <= 0:
+                return []
+            return self.rng.choices(identifiers, cum_weights=cumulative, k=count)
+
+        return pick
 
     def _pareto_picker(self, values: Sequence, exponent: float):
         """Construit un tireur pondere par une loi de puissance sur un rang aleatoire.
