@@ -37,10 +37,14 @@ allumer en plus de Cassandra.
 
 ## Attention a la version de Java
 
-Spark 3.5 fonctionne avec Java 8, 11 ou 17, **pas au-dela**. Les JVM plus
-recentes verrouillent l'acces reflexif a leurs internes, dont Spark depend
-pour sa serialisation. L'echec se manifeste par des `InaccessibleObjectException`
-illisibles, tres loin de la cause reelle.
+Spark 3.5 est officiellement supporte sur Java 8, 11 et 17. Java 21 a ete
+verifie comme fonctionnel sur ce projet et est accepte en repli. **Au-dela, non**
+: les JVM recentes verrouillent l'acces reflexif a leurs internes, dont Spark
+depend pour sa serialisation. L'echec se manifeste par des
+`InaccessibleObjectException` illisibles, tres loin de la cause reelle.
+
+Le Codespace utilise ici fournit Java 25 par defaut : le script bascule
+automatiquement sur le JDK 21 installe via SDKMAN.
 
 Le script `scripts/phase3_spark.sh` verifie la version courante, cherche un JDK
 compatible parmi les emplacements habituels (`/usr/lib/jvm`, SDKMAN) et force
