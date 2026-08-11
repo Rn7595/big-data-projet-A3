@@ -86,3 +86,4 @@ tests/       controles de coherence entre les phases
 - [Formatage Spark et Parquet](docs/04-spark-parquet.md)
 - [Indexation Elasticsearch et dashboard Kibana](docs/05-elasticsearch-kibana.md)
 - [Script de la soutenance video](docs/06-script-video.md)
+- [Demonstrations interactives](docs/07-demonstration-live.md)
