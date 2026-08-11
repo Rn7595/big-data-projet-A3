@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 from pyspark.sql import DataFrame
+from pyspark.sql import functions as F
 
 from pipeline.config import PARQUET_DIR, REPORT_DIR, ensure_dirs
 from pipeline.phase3_spark import transforms as T
@@ -36,6 +37,20 @@ def write_parquet(df: DataFrame, name: str, partition_by: list[str] | None = Non
     bon arbitrage.
     """
     target = PARQUET_DIR / name
+    if partition_by:
+        # Redistribution prealable sur les colonnes de partitionnement.
+        #
+        # Sans elle, Spark ecrit un fichier par partition d'execution ET par
+        # repertoire : la lecture Cassandra produisant une partition par plage
+        # de jetons, on obtenait 143 fichiers de 46 Ko pour 24 repertoires.
+        # C'est le probleme classique des petits fichiers, chacun portant son
+        # propre en-tete et ses statistiques -- exactement ce que le format
+        # colonnaire cherche a eviter.
+        #
+        # Apres redistribution, toutes les lignes d'un meme couple annee-mois
+        # sont sur la meme partition d'execution : un fichier par repertoire.
+        df = df.repartition(*[F.col(colonne) for colonne in partition_by])
+
     writer = df.write.mode("overwrite").option("compression", "snappy")
     if partition_by:
         writer = writer.partitionBy(*partition_by)
@@ -50,7 +65,12 @@ def write_parquet(df: DataFrame, name: str, partition_by: list[str] | None = Non
 def main() -> None:
     ensure_dirs()
     spark = build_session()
-    spark.sparkContext.setLogLevel("WARN")
+    # Les avertissements attendus sont deja documentes dans le code : fenetres
+    # sans partitionnement pour la segmentation RFM (quelques milliers de
+    # lignes), metriques de ramasse-miettes, absence de bibliotheque Hadoop
+    # native. Les afficher noierait la sortie du pipeline sous une trentaine de
+    # lignes sans interet a chaque execution.
+    spark.sparkContext.setLogLevel("ERROR")
     report: dict[str, dict] = {}
 
     try:

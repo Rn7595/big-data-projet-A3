@@ -183,6 +183,12 @@ agregation produirait 200 fichiers de quelques kilo-octets. La multiplication
 de petits fichiers est le probleme classique du stockage colonnaire, chacun
 portant son propre en-tete et ses metadonnees.
 
+Le meme piege se presente a l'ecriture partitionnee : Spark ecrit un fichier
+par partition d'execution **et** par repertoire. La lecture Cassandra produisant
+une partition par plage de jetons, on obtenait 143 fichiers de 46 Ko pour
+24 repertoires. Une redistribution sur les colonnes de partitionnement, juste
+avant l'ecriture, ramene le resultat a un fichier par repertoire.
+
 ## Les sorties
 
 | Fichier Parquet | Grain | Usage |
