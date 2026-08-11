@@ -237,9 +237,11 @@ class DataGenerator:
         rows = []
         for product_id in range(1, self.config.nb_products + 1):
             category_id, category_code = self.rng.choice(leaf_categories)
-            nouns, price_min, price_max = ref.CATALOGUE[category_code]
+            # Le type de produit porte sa propre fourchette de prix : une webcam
+            # et un ecran 27 pouces appartiennent a la meme categorie sans avoir
+            # le meme ordre de prix.
+            noun, price_min, price_max = self.rng.choice(ref.CATALOGUE[category_code])
             brand = self.rng.choice(ref.BRANDS)
-            noun = self.rng.choice(nouns)
             model = f"{self.rng.choice('ABCEGKMNPRSTVXZ')}{self.rng.randrange(10, 990)}"
             name = self._maybe_dirty_label(f"{noun} {brand} {model}", DIRTY_PRODUCT_RATE, "produit")
 

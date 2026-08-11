@@ -91,15 +91,24 @@ def main() -> None:
         annees = (facts.filter("is_revenue")
                   .groupBy("order_year").sum("net_amount")
                   .orderBy("order_year").collect())
+        total_ca = 0.0
         for row in annees:
             LOGGER.info("    %s  %14s EUR", row["order_year"], f"{row['sum(net_amount)']:,.2f}")
+            total_ca += float(row["sum(net_amount)"])
+        # Conserve pour le controle de coherence : Elasticsearch recalculera ce
+        # meme total en phase 4, par un chemin entierement different.
+        report["chiffre_affaires"] = round(total_ca, 2)
+        LOGGER.info("Chiffre d'affaires total : %s EUR", f"{total_ca:,.2f}")
 
     finally:
         spark.stop()
 
     # Comparaison des formats : c'est le chiffre a montrer en soutenance pour
     # justifier le passage au colonnaire.
-    total_parquet = sum(section["octets"] for section in report.values())
+    # Le rapport melange des sections decrivant un fichier et des mesures
+    # scalaires : seules les premieres portent une taille.
+    total_parquet = sum(section["octets"] for section in report.values()
+                        if isinstance(section, dict) and "octets" in section)
     phase1_file = REPORT_DIR / "phase1_extraction.json"
     if phase1_file.exists():
         phase1 = json.loads(phase1_file.read_text(encoding="utf-8"))

@@ -7,43 +7,79 @@ marques, et la geographie utilisee pour les adresses.
 
 from __future__ import annotations
 
-# Pour chaque code de categorie feuille : les intitules de produits possibles et
-# la fourchette de prix. Faire varier les prix par categorie evite un chiffre
-# d'affaires uniforme et rend les agregations Kibana lisibles : un televiseur ne
-# doit pas peser autant qu'un cahier.
-CATALOGUE: dict[str, tuple[tuple[str, ...], float, float]] = {
-    "PC_PORTABLE": (("Ordinateur portable", "Ultrabook", "PC portable gamer"), 449, 2299),
-    "PC_BUREAU": (("Ordinateur de bureau", "Tour gamer", "Mini PC"), 379, 1899),
-    "PERIPHERIQUE": (("Clavier mecanique", "Souris sans fil", "Ecran 27 pouces", "Webcam"), 19, 549),
-    "STOCKAGE": (("Disque SSD", "Disque dur externe", "Cle USB", "Carte memoire"), 12, 329),
-    "TELEVISEUR": (("Televiseur OLED", "Televiseur QLED", "Televiseur LED"), 299, 2499),
-    "CASQUE": (("Casque bluetooth", "Casque a reduction de bruit", "Ecouteurs sans fil"), 29, 449),
-    "ENCEINTE": (("Enceinte nomade", "Enceinte connectee", "Barre de son"), 39, 699),
-    "HOME_CINEMA": (("Videoprojecteur", "Ampli home cinema", "Kit 5.1"), 199, 1799),
-    "SMARTPHONE": (("Smartphone", "Smartphone pliable", "Telephone reconditionne"), 149, 1449),
-    "TABLETTE": (("Tablette tactile", "Tablette graphique", "Liseuse"), 89, 1249),
-    "ACC_MOBILE": (("Coque de protection", "Chargeur rapide", "Batterie externe", "Verre trempe"), 8, 89),
-    "OBJET_CONNECTE": (("Montre connectee", "Bracelet d'activite", "Balance connectee"), 39, 599),
-    "PETIT_ELECTRO": (("Robot patissier", "Cafetiere expresso", "Aspirateur balai", "Friteuse sans huile"), 49, 899),
-    "GROS_ELECTRO": (("Lave-linge", "Refrigerateur combine", "Lave-vaisselle", "Four encastrable"), 299, 1699),
-    "ARTS_TABLE": (("Service d'assiettes", "Set de couteaux", "Cocotte en fonte", "Verres a pied"), 19, 349),
-    "LINGE_MAISON": (("Parure de lit", "Couette 4 saisons", "Lot de serviettes", "Rideaux occultants"), 15, 249),
-    "VET_HOMME": (("Chemise en lin", "Pull en laine", "Jean droit", "Veste matelassee"), 19, 249),
-    "VET_FEMME": (("Robe portefeuille", "Blouse en soie", "Manteau long", "Jean taille haute"), 22, 289),
-    "CHAUSSURES": (("Baskets en cuir", "Bottines", "Sandales", "Chaussures de ville"), 29, 279),
-    "MAROQUINERIE": (("Sac a main", "Portefeuille", "Sac a dos urbain", "Ceinture en cuir"), 25, 429),
-    "FITNESS": (("Tapis de yoga", "Halteres reglables", "Rameur pliable", "Banc de musculation"), 15, 899),
-    "CYCLISME": (("Velo de route", "VTT tout suspendu", "Casque de velo", "Compteur GPS"), 29, 2399),
-    "RANDONNEE": (("Sac de randonnee", "Tente 2 places", "Chaussures de trek", "Batons telescopiques"), 29, 499),
-    "SPORT_COLLECTIF": (("Ballon de football", "Maillot officiel", "Raquette de tennis", "Filet de badminton"), 12, 199),
-    "SOIN_VISAGE": (("Creme hydratante", "Serum a l'acide hyaluronique", "Nettoyant moussant"), 9, 129),
-    "PARFUM": (("Eau de parfum", "Eau de toilette", "Coffret parfum"), 29, 219),
-    "CAPILLAIRE": (("Shampooing reparateur", "Seche-cheveux", "Lisseur ceramique"), 7, 189),
-    "APPAREIL_SOIN": (("Brosse a dents electrique", "Epilateur lumiere pulsee", "Tondeuse a barbe"), 19, 449),
-    "ROMAN": (("Roman policier", "Roman historique", "Recueil de nouvelles"), 7, 29),
-    "BD_MANGA": (("Bande dessinee", "Manga tome unique", "Coffret integrale"), 9, 89),
-    "SCOLAIRE": (("Manuel scolaire", "Annales du bac", "Cahier d'exercices"), 6, 39),
-    "FOURNITURE": (("Lot de stylos", "Cahier grand format", "Trousse garnie", "Agenda"), 3, 45),
+# Pour chaque code de categorie feuille : les types de produits vendus, chacun
+# avec sa propre fourchette de prix.
+#
+# La fourchette est definie par TYPE DE PRODUIT et non par categorie. Une
+# fourchette unique par categorie produisait des aberrations : la categorie
+# Peripheriques allant de 19 a 549 EUR, une webcam pouvait couter 500 EUR et un
+# ecran 27 pouces 20 EUR. Un jury qui lit le tableau des meilleures ventes le
+# remarque immediatement.
+CATALOGUE: dict[str, tuple[tuple[str, float, float], ...]] = {
+    "PC_PORTABLE": (("Ordinateur portable", 399, 899), ("Ultrabook", 899, 1799),
+                    ("PC portable gamer", 999, 2299)),
+    "PC_BUREAU": (("Ordinateur de bureau", 349, 899), ("Tour gamer", 899, 1999),
+                  ("Mini PC", 249, 649)),
+    "PERIPHERIQUE": (("Clavier mecanique", 39, 169), ("Souris sans fil", 15, 89),
+                     ("Ecran 27 pouces", 129, 549), ("Webcam", 25, 129)),
+    "STOCKAGE": (("Disque SSD", 39, 229), ("Disque dur externe", 49, 179),
+                 ("Cle USB", 6, 39), ("Carte memoire", 9, 69)),
+    "TELEVISEUR": (("Televiseur LED", 249, 599), ("Televiseur QLED", 599, 1499),
+                   ("Televiseur OLED", 999, 2499)),
+    "CASQUE": (("Ecouteurs sans fil", 19, 199), ("Casque bluetooth", 39, 249),
+               ("Casque a reduction de bruit", 129, 399)),
+    "ENCEINTE": (("Enceinte nomade", 29, 159), ("Enceinte connectee", 49, 249),
+                 ("Barre de son", 129, 699)),
+    "HOME_CINEMA": (("Videoprojecteur", 299, 1499), ("Ampli home cinema", 349, 1299),
+                    ("Kit 5.1", 199, 899)),
+    "SMARTPHONE": (("Telephone reconditionne", 99, 349), ("Smartphone", 199, 999),
+                   ("Smartphone pliable", 899, 1799)),
+    "TABLETTE": (("Liseuse", 89, 249), ("Tablette tactile", 149, 899),
+                 ("Tablette graphique", 79, 1249)),
+    "ACC_MOBILE": (("Verre trempe", 6, 19), ("Coque de protection", 8, 39),
+                   ("Chargeur rapide", 15, 59), ("Batterie externe", 19, 89)),
+    "OBJET_CONNECTE": (("Bracelet d'activite", 29, 99), ("Montre connectee", 99, 599),
+                       ("Balance connectee", 29, 129)),
+    "PETIT_ELECTRO": (("Friteuse sans huile", 59, 199), ("Cafetiere expresso", 79, 599),
+                      ("Aspirateur balai", 129, 699), ("Robot patissier", 199, 899)),
+    "GROS_ELECTRO": (("Lave-linge", 299, 899), ("Lave-vaisselle", 279, 849),
+                     ("Refrigerateur combine", 349, 1299), ("Four encastrable", 249, 1099)),
+    "ARTS_TABLE": (("Verres a pied", 12, 59), ("Service d'assiettes", 29, 149),
+                   ("Set de couteaux", 39, 229), ("Cocotte en fonte", 49, 349)),
+    "LINGE_MAISON": (("Lot de serviettes", 12, 49), ("Parure de lit", 25, 129),
+                     ("Couette 4 saisons", 39, 189), ("Rideaux occultants", 19, 99)),
+    "VET_HOMME": (("Jean droit", 29, 99), ("Chemise en lin", 25, 89),
+                  ("Pull en laine", 35, 149), ("Veste matelassee", 59, 249)),
+    "VET_FEMME": (("Blouse en soie", 29, 129), ("Jean taille haute", 29, 99),
+                  ("Robe portefeuille", 35, 159), ("Manteau long", 69, 289)),
+    "CHAUSSURES": (("Sandales", 19, 79), ("Baskets en cuir", 49, 179),
+                   ("Bottines", 45, 199), ("Chaussures de ville", 59, 229)),
+    "MAROQUINERIE": (("Ceinture en cuir", 19, 69), ("Portefeuille", 19, 99),
+                     ("Sac a dos urbain", 35, 159), ("Sac a main", 45, 429)),
+    "FITNESS": (("Tapis de yoga", 12, 49), ("Halteres reglables", 39, 249),
+                ("Banc de musculation", 79, 399), ("Rameur pliable", 199, 899)),
+    "CYCLISME": (("Casque de velo", 25, 129), ("Compteur GPS", 39, 349),
+                 ("VTT tout suspendu", 399, 1899), ("Velo de route", 449, 2399)),
+    "RANDONNEE": (("Batons telescopiques", 19, 79), ("Sac de randonnee", 39, 179),
+                  ("Chaussures de trek", 59, 219), ("Tente 2 places", 69, 499)),
+    "SPORT_COLLECTIF": (("Ballon de football", 9, 49), ("Filet de badminton", 19, 79),
+                        ("Maillot officiel", 29, 99), ("Raquette de tennis", 29, 199)),
+    "SOIN_VISAGE": (("Nettoyant moussant", 7, 29), ("Creme hydratante", 9, 59),
+                    ("Serum a l'acide hyaluronique", 15, 129)),
+    "PARFUM": (("Eau de toilette", 25, 89), ("Eau de parfum", 39, 159),
+               ("Coffret parfum", 45, 219)),
+    "CAPILLAIRE": (("Shampooing reparateur", 5, 19), ("Seche-cheveux", 19, 129),
+                   ("Lisseur ceramique", 25, 189)),
+    "APPAREIL_SOIN": (("Tondeuse a barbe", 15, 79), ("Brosse a dents electrique", 19, 149),
+                      ("Epilateur lumiere pulsee", 99, 449)),
+    "ROMAN": (("Roman policier", 6, 19), ("Roman historique", 7, 22),
+              ("Recueil de nouvelles", 6, 18)),
+    "BD_MANGA": (("Manga tome unique", 7, 13), ("Bande dessinee", 10, 25),
+                 ("Coffret integrale", 29, 89)),
+    "SCOLAIRE": (("Cahier d'exercices", 5, 15), ("Manuel scolaire", 12, 35),
+                 ("Annales du bac", 9, 25)),
+    "FOURNITURE": (("Lot de stylos", 3, 15), ("Cahier grand format", 3, 12),
+                   ("Trousse garnie", 9, 35), ("Agenda", 6, 29)),
 }
 
 BRANDS = (
@@ -146,4 +182,4 @@ SHIPPING_FEE = 4.90
 # volume sur les articles les moins chers, avec une concentration de 95 %
 # sans rapport avec un catalogue reel.
 PRODUCT_RANK_EXPONENT = 0.60
-PRODUCT_PRICE_EXPONENT = 1.15
+PRODUCT_PRICE_EXPONENT = 1.00
