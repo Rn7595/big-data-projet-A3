@@ -102,9 +102,15 @@ Genere par `pipeline/phase1_oracle/generate_data.py`, volumetrie pilotee par
 | `countries` / `payment_methods` / `categories` | 8 / 5 / 40 |
 | `products` | 800 |
 | `customers` | 5 000 |
-| `addresses` | ~6 250 |
+| `addresses` | ~11 200 (1 facturation + 1 ou 2 livraisons par client) |
 | `orders` | 60 000 |
-| `order_items` | ~150 000 |
+| `order_items` | ~149 000 |
+
+Volumes releves lors d'une execution reelle. L'extraction produit **59 701**
+documents et non 60 000 : les 299 commandes sans ligne sont ecartees par la
+jointure interne sur les lignes de commande. L'ecart est mesure et documente
+par le controle informatif `commandes_sans_ligne`, precisement pour qu'il n'y
+ait rien a improviser si le jury le remarque.
 
 **Pourquoi generer plutot que telecharger ?** Les jeux publics d'e-commerce
 sont presque toujours livres a plat, deja denormalises — les charger reviendrait
