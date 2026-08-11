@@ -49,6 +49,7 @@ Cassandra reste allume entre les phases 2 et 3 : c'est la seule phase qui lit
 une base plutot qu'un fichier. Spark s'executant en local, sans conteneur, le
 pic memoire reste maitrise.
 
+`make test` verifie la coherence des volumetries entre les quatre phases.
 `make help` liste toutes les cibles. Kibana est ensuite disponible sur
 <http://localhost:5601>.
 
@@ -84,3 +85,4 @@ tests/       controles de coherence entre les phases
 - [Modele Cassandra et denormalisation](docs/03-modele-cassandra.md)
 - [Formatage Spark et Parquet](docs/04-spark-parquet.md)
 - [Indexation Elasticsearch et dashboard Kibana](docs/05-elasticsearch-kibana.md)
+- [Script de la soutenance video](docs/06-script-video.md)
