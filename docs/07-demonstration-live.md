@@ -41,7 +41,7 @@ SELECT constraint_name, table_name FROM user_constraints
 WHERE constraint_type = 'R' ORDER BY table_name;
 ```
 
-> « Onze cles etrangeres. C'est le SGBD qui garantit qu'une ligne de commande
+> « Dix cles etrangeres. C'est le SGBD qui garantit qu'une ligne de commande
 > ne peut pas referencer un produit inexistant. »
 
 ### La demonstration la plus parlante : le total absent
