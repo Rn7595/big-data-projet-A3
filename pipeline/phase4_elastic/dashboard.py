@@ -337,7 +337,13 @@ def import_objects(content: str) -> None:
 
 
 def export_objects() -> None:
-    """Renvoie dans le depot ce que contient Kibana."""
+    """Renvoie dans le depot ce que contient Kibana.
+
+    L'ecriture n'a lieu que si l'export contient effectivement un tableau de
+    bord. Sans cette garde, exporter depuis un Kibana vide remplacerait le
+    fichier versionne par une coquille : la commande censee sauvegarder le
+    travail le detruirait.
+    """
     response = requests.post(
         f"{ELASTIC.kibana_url}/api/saved_objects/_export",
         headers=HEADERS,
@@ -346,10 +352,25 @@ def export_objects() -> None:
     )
     if response.status_code >= 400:
         raise RuntimeError(f"Export refuse : {response.text[:400]}")
+
+    objets = [json.loads(ligne) for ligne in response.text.strip().splitlines() if ligne.strip()]
+    par_type: dict[str, int] = {}
+    for objet in objets:
+        if "type" in objet:
+            par_type[objet["type"]] = par_type.get(objet["type"], 0) + 1
+    LOGGER.info("Contenu de Kibana : %s",
+                ", ".join(f"{nombre} {nom}" for nom, nombre in sorted(par_type.items())) or "vide")
+
+    if not par_type.get("dashboard"):
+        LOGGER.error("Aucun tableau de bord dans Kibana : le fichier %s n'est pas modifie.",
+                     NDJSON_FILE.name)
+        LOGGER.error("Construisez-le d'abord :")
+        LOGGER.error("    python -m pipeline.phase4_elastic.dashboard build")
+        raise SystemExit(1)
+
     KIBANA_DIR.mkdir(parents=True, exist_ok=True)
     NDJSON_FILE.write_text(response.text, encoding="utf-8")
-    LOGGER.info("Objets Kibana exportes dans %s (%d lignes)",
-                NDJSON_FILE, response.text.count("\n"))
+    LOGGER.info("Objets Kibana exportes dans %s", NDJSON_FILE)
 
 
 def main() -> None:
