@@ -224,3 +224,6 @@ data/
 spark-warehouse/
 metastore_db/
 derby.log
+
+# Journaux d execution locaux
+logs-*.txt
