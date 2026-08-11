@@ -27,15 +27,26 @@ def main() -> None:
         cass.register_types(cluster, CASSANDRA.keyspace)
         session.set_keyspace(CASSANDRA.keyspace)
 
-        # Q1 -----------------------------------------------------------------
-        # Le client est choisi au hasard parmi les commandes chargees.
+        # Choix d'un exemple ---------------------------------------------------
+        #
+        # Ce SELECT sans clause WHERE est le seul du script : il sert uniquement
+        # a designer un client au hasard pour la demonstration. C'est justement
+        # le type de lecture que le modele proscrit -- il est borne a une ligne
+        # et n'a aucun equivalent dans un usage applicatif, ou l'identifiant du
+        # client vient toujours de la session en cours.
+        print("Choix d'un exemple (seule lecture sans cle de partition du script,")
+        print("bornee a une ligne ; dans une application, l'identifiant du client")
+        print("proviendrait de la session en cours) :")
         customer_id = session.execute(
             "SELECT customer_id FROM orders_by_customer LIMIT 1").one().customer_id
+        print(f"    client retenu : {customer_id}")
+
+        # Q1 -----------------------------------------------------------------
         titre("Q1", "les dernieres commandes d'un client",
               f"SELECT ... FROM orders_by_customer WHERE customer_id = {customer_id} LIMIT 5")
-        rows = session.execute(
-            "SELECT order_ref, order_date, order_status, items_count, total_amount "
-            "FROM orders_by_customer WHERE customer_id = %s LIMIT 5", (customer_id,))
+        rows = list(session.execute(
+            "SELECT order_id, order_ref, order_date, order_status, items_count, total_amount "
+            "FROM orders_by_customer WHERE customer_id = %s LIMIT 5", (customer_id,)))
         for row in rows:
             print(f"      {row.order_ref}  {row.order_date:%Y-%m-%d}  {row.order_status:<10}"
                   f"  {row.items_count} article(s)  {row.total_amount} EUR")
@@ -43,18 +54,25 @@ def main() -> None:
         print("    l'ordre est celui du disque, aucun tri n'est calcule ici.")
 
         # Q2 -----------------------------------------------------------------
-        order_id = session.execute("SELECT order_id FROM order_by_id LIMIT 1").one().order_id
-        titre("Q2", "le detail d'une commande",
+        # On reprend la commande la plus recente de Q1 : les deux requetes
+        # portent ainsi sur la meme donnee, atteinte par deux cles differentes.
+        order_id = rows[0].order_id
+        titre("Q2", "le detail de cette meme commande, atteinte par son identifiant",
               f"SELECT ... FROM order_by_id WHERE order_id = {order_id}")
         order = session.execute(
-            "SELECT order_ref, customer_email, total_amount, items "
+            "SELECT order_ref, customer_email, total_amount, items_count, items "
             "FROM order_by_id WHERE order_id = %s", (order_id,)).one()
         print(f"      {order.order_ref}  {order.customer_email}  {order.total_amount} EUR")
+        total_lignes = 0
         for item in order.items:
             print(f"        ligne {item.line_no}  {item.product_name[:42]:<42}"
                   f"  x{item.quantity}  {item.line_amount} EUR")
-        print("    Les lignes de commande sont dans la ligne elle-meme :")
-        print("    une seule lecture, une seule partition, zero jointure.")
+            total_lignes += item.line_amount
+        print(f"      somme des lignes : {total_lignes} EUR "
+              f"-> total pre-calcule a l'ecriture : {order.total_amount} EUR (frais de port inclus)")
+        print("    Meme commande que la premiere ligne de Q1, lue depuis une autre table :")
+        print("    la duplication est le modele, pas un defaut. Les lignes de commande")
+        print("    sont dans la ligne elle-meme : une lecture, une partition, zero jointure.")
 
         # Q3 -----------------------------------------------------------------
         sample = session.execute(
