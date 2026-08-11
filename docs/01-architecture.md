@@ -47,12 +47,16 @@ reste de l'ordre de 5 Go (Cassandra 3 Go + JVM Spark 2 Go).
 Les 16 Go d'un Codespace sont partages avec l'IDE et le systeme. Les plafonds
 sont declares dans `docker-compose.yml` :
 
-| Phase | Conteneurs | `mem_limit` | Pic reel observe |
-|-------|-----------|-------------|------------------|
-| 1 | Oracle | 4 Go | ~2,5 Go |
-| 2 | Cassandra | 3 Go | ~1,8 Go (heap bornee a 1 Go) |
-| 3 | Cassandra + Spark local | 3 Go + 2 Go | ~4,5 Go |
-| 4 | Elasticsearch + Kibana | 2,5 + 2 Go | ~3,5 Go |
+| Phase | Conteneurs | `mem_limit` declare | Ordre de grandeur attendu |
+|-------|-----------|---------------------|---------------------------|
+| 1 | Oracle | 4 Go | 2 a 3 Go |
+| 2 | Cassandra | 3 Go | ~2 Go (heap bornee a 1 Go) |
+| 3 | Cassandra + Spark local | 3 Go + 2 Go | 4 a 5 Go |
+| 4 | Elasticsearch + Kibana | 2,5 + 2 Go | 3 a 4 Go |
+
+Les `mem_limit` sont des plafonds imposes aux conteneurs ; la derniere colonne
+donne l'ordre de grandeur attendu, a confirmer par `docker stats` pendant le
+premier run.
 
 Si les quatre phases tournaient ensemble, le total declare atteindrait 11,5 Go,
 auxquels s'ajouteraient les JVM locales : la machine tiendrait mal. En
