@@ -86,10 +86,16 @@ sur la phase 1 sans rejouer la generation.
 ```bash
 make install
 make phase1 && make oracle-down
-make phase2 && make cassandra-down
+make phase2
 make phase3
+make cassandra-down
 make phase4
 ```
+
+Cassandra reste allume entre les phases 2 et 3, seul endroit ou une phase lit
+une base et non un fichier. Les scripts refusent de demarrer si la phase
+precedente n'a pas produit son fichier, ou si un conteneur qui aurait du etre
+eteint tourne encore.
 
 Chaque script de phase attend l'etat `healthy` du conteneur (defini par les
 `healthcheck` du Compose) plutot qu'une temporisation fixe, et rappelle en fin

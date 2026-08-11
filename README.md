@@ -26,11 +26,16 @@ make install
 Puis, dans l'ordre :
 
 ```bash
-make phase1 && make oracle-down       # Oracle    -> data/json/
-make phase2 && make cassandra-down    # Cassandra <- data/json/
-make phase3                           # Spark     -> data/parquet/
-make phase4                           # Elastic   -> index + dashboard
+make phase1 && make oracle-down    # Oracle    -> data/json/
+make phase2                        # Cassandra <- data/json/
+make phase3                        # Spark lit Cassandra -> data/parquet/
+make cassandra-down                # Cassandra n'est plus utile
+make phase4                        # Elastic   -> index + dashboard
 ```
+
+Cassandra reste allume entre les phases 2 et 3 : c'est la seule phase qui lit
+une base plutot qu'un fichier. Spark s'executant en local, sans conteneur, le
+pic memoire reste maitrise.
 
 `make help` liste toutes les cibles. Kibana est ensuite disponible sur
 <http://localhost:5601>.
@@ -64,3 +69,4 @@ tests/       controles de coherence entre les phases
 
 - [Architecture et execution sequentielle](docs/01-architecture.md)
 - [Modele relationnel Oracle](docs/02-modele-oracle.md)
+- [Modele Cassandra et denormalisation](docs/03-modele-cassandra.md)
