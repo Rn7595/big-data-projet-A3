@@ -15,14 +15,36 @@ NB_CUSTOMERS=800
 Les temps sont alors divises par dix et une phase se deroule en direct pendant
 que vous parlez.
 
+**Ou presenter : dans VS Code, pas sur GitHub.**
+
+GitHub ne sait ni executer une commande, ni afficher Kibana. Un depot en ligne
+montre du code fige ; la soutenance doit montrer une chaine qui tourne. Tout se
+passe donc dans le Codespace, avec son terminal.
+
+L'application VS Code de bureau est preferable au navigateur pour
+l'enregistrement : pas de barre d'adresse ni d'onglets a l'ecran, et les
+raccourcis clavier ne sont pas intercepes par le navigateur. Pour y basculer :
+`Ctrl+Shift+P` puis `Open in VS Code Desktop`. La machine reste la meme, seule
+la fenetre change.
+
+GitHub peut servir dix secondes en ouverture, pour montrer que le projet est
+versionne et organise. Ce n'est pas indispensable.
+
 **Preparez vos fenetres a l'avance :**
 
-| Onglet | Contenu |
+| Fenetre | Contenu |
 |---|---|
-| 1 | terminal, police agrandie (`Ctrl` + `+` deux ou trois fois) |
-| 2 | `docs/01-architecture.md` en apercu, pour le schema |
-| 3 | Kibana, dashboard deja ouvert et charge |
-| 4 | VS Code sur `sql/10_extract_orders.sql` |
+| VS Code | terminal ouvert en bas, police agrandie (`Ctrl` + `+` deux ou trois fois) |
+| VS Code | onglets deja ouverts : `docker-compose.yml`, `sql/01_schema.sql`, `sql/10_extract_orders.sql`, `cql/02_tables.cql` |
+| Navigateur | Kibana, dashboard charge, periode reglee |
+
+Fermez l'explorateur de fichiers pendant les demonstrations en terminal
+(`Ctrl+B`) : l'ecran gagne en lisibilite une fois compresse par la video.
+
+**Pour enregistrer**, au choix : la barre de jeu de Windows (`Win+G`), OBS
+Studio, ou l'enregistrement d'ecran de PowerPoint. Enregistrez en 1080p et
+verifiez qu'un texte de terminal reste lisible sur la video finale avant de
+tourner les dix minutes.
 
 **Trois verifications juste avant :**
 
