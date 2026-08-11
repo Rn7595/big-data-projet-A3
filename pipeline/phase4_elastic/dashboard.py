@@ -309,31 +309,41 @@ def build_dashboard(version: str = "8.15.3") -> dict:
     }
 
 
+def all_objects() -> list[dict]:
+    """Les objets a creer, visualisations d'abord puis le tableau de bord."""
+    return build_visualisations() + [build_dashboard()]
+
+
 def generate_ndjson() -> str:
-    objects = build_visualisations() + [build_dashboard()]
-    lines = [json.dumps(obj, ensure_ascii=False) for obj in objects]
-    lines.append(json.dumps({"excludedObjects": [], "excludedObjectsCount": 0,
-                             "exportedCount": len(objects), "missingRefCount": 0,
-                             "missingReferences": []}))
+    """Serialise les objets au format d'export Kibana, pour le versionnement."""
+    lines = [json.dumps(obj, ensure_ascii=False) for obj in all_objects()]
     return "\n".join(lines) + "\n"
 
 
-def import_objects(content: str) -> None:
-    response = requests.post(
-        f"{ELASTIC.kibana_url}/api/saved_objects/_import",
-        params={"overwrite": "true"},
-        headers={"kbn-xsrf": "true"},
-        files={"file": ("dashboard.ndjson", content, "application/ndjson")},
-        timeout=120,
-    )
-    if response.status_code >= 400:
-        raise RuntimeError(f"Import refuse par Kibana : {response.text[:600]}")
+def create_objects(objects: list[dict]) -> None:
+    """Cree les objets un par un via l'API des objets sauvegardes.
 
-    result = response.json()
-    if not result.get("success"):
-        errors = json.dumps(result.get("errors", []), ensure_ascii=False)[:800]
-        raise RuntimeError(f"Import partiel : {errors}")
-    LOGGER.info("%d objets importes dans Kibana", result.get("successCount", 0))
+    L'API d'import en masse (_import) accepte un fichier NDJSON, mais elle
+    signale la moindre anomalie par une erreur 500 sans detail : impossible de
+    savoir quel objet pose probleme. En creant les objets un par un, chaque
+    refus est rattache a son objet et Kibana renvoie le champ fautif.
+
+    Les visualisations sont creees avant le tableau de bord qui les reference.
+    """
+    for objet in objects:
+        url = f"{ELASTIC.kibana_url}/api/saved_objects/{objet['type']}/{objet['id']}"
+        response = requests.post(
+            url, params={"overwrite": "true"}, headers=HEADERS,
+            json={"attributes": objet["attributes"], "references": objet.get("references", [])},
+            timeout=60,
+        )
+        if response.status_code >= 400:
+            raise RuntimeError(
+                f"Creation refusee pour {objet['type']}/{objet['id']} "
+                f"(HTTP {response.status_code}) : {response.text[:600]}"
+            )
+        LOGGER.info("  %-12s %-20s cree", objet["type"], objet["id"])
+    LOGGER.info("%d objets crees dans Kibana", len(objects))
 
 
 def export_objects() -> None:
@@ -389,19 +399,22 @@ def main() -> None:
         create_data_views()
 
     KIBANA_DIR.mkdir(parents=True, exist_ok=True)
-    content = generate_ndjson()
-    NDJSON_FILE.write_text(content, encoding="utf-8")
+    NDJSON_FILE.write_text(generate_ndjson(), encoding="utf-8")
 
-    with step(LOGGER, "import du tableau de bord"):
+    with step(LOGGER, "creation du tableau de bord"):
         try:
-            import_objects(content)
+            create_objects(all_objects())
         except RuntimeError as error:
             # L'indexation, elle, a reussi : mieux vaut expliquer comment
             # terminer a la main que faire echouer toute la phase.
             LOGGER.error("%s", error)
-            LOGGER.error("Les vues de donnees sont en place : le tableau de bord peut etre")
-            LOGGER.error("construit dans Kibana, puis renvoye dans le depot par :")
+            LOGGER.error("")
+            LOGGER.error("Les index et les vues de donnees sont en place. Le tableau de bord")
+            LOGGER.error("peut etre construit dans Kibana, puis renvoye dans le depot par :")
             LOGGER.error("    python -m pipeline.phase4_elastic.dashboard export")
+            LOGGER.error("")
+            LOGGER.error("Detail cote serveur, si besoin :")
+            LOGGER.error("    docker logs bde-kibana --tail 60")
             raise SystemExit(1)
 
     LOGGER.info("Tableau de bord disponible : %s/app/dashboards#/view/%s",
