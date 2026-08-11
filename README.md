@@ -14,7 +14,19 @@ ensemble, ce qui permet de faire tenir l'ensemble dans un GitHub Codespace de
 
 - Docker et Docker Compose v2
 - Python 3.10 ou plus
-- Java 17 (requis par PySpark en phase 3 uniquement)
+- Java 17 ou 21 (requis par PySpark en phase 3 uniquement)
+
+Le script de la phase 3 detecte la version de Java et bascule automatiquement
+sur un JDK compatible s'il en trouve un.
+
+Si `pip install pyspark` echoue sur `AttributeError: install_layout`, c'est une
+incompatibilite entre les versions recentes de setuptools et le `setup.py` de
+PySpark 3.5. Contournement :
+
+```bash
+pip install "setuptools<75" wheel
+pip install --no-build-isolation pyspark==3.5.3
+```
 
 ## Demarrage
 
@@ -70,3 +82,4 @@ tests/       controles de coherence entre les phases
 - [Architecture et execution sequentielle](docs/01-architecture.md)
 - [Modele relationnel Oracle](docs/02-modele-oracle.md)
 - [Modele Cassandra et denormalisation](docs/03-modele-cassandra.md)
+- [Formatage Spark et Parquet](docs/04-spark-parquet.md)
