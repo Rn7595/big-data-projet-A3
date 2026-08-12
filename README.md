@@ -87,3 +87,4 @@ tests/       controles de coherence entre les phases
 - [Indexation Elasticsearch et dashboard Kibana](docs/05-elasticsearch-kibana.md)
 - [Script de la soutenance video](docs/06-script-video.md)
 - [Demonstrations interactives](docs/07-demonstration-live.md)
+- [Deroule operatoire de l enregistrement](docs/08-deroule-enregistrement.md)
