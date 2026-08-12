@@ -184,7 +184,7 @@ imprevues, unicite de la verite, agregats libres.
 > que le bucketing temporel de ma cle Cassandra, applique au systeme de
 > fichiers.
 >
-> **Le chiffre : 76 Mo de JSON deviennent 8,3 Mo de Parquet. Facteur 9.** »
+> **Le chiffre : 76 Mo de JSON deviennent 5 Mo de Parquet. Facteur 15.** »
 
 ---
 
@@ -261,7 +261,7 @@ bonne soutenance d'une tres bonne.**
 |---|---|
 | « Pourquoi cette cle de partition ? » | Forte cardinalite pour repartir sur l'anneau, taille bornee par le bucket mensuel, et elle correspond a la question posee. |
 | « Qu'avez-vous perdu en denormalisant ? » | L'integrite referentielle, les requetes imprevues, l'unicite de la verite, et les agregats transverses — c'est pour ces derniers que Spark existe dans la chaine. |
-| « Pourquoi Parquet plutot que CSV ? » | Colonnaire, compresse, type, filtrable par statistiques de fichier : facteur 9 mesure sur ce jeu. |
+| « Pourquoi Parquet plutot que CSV ? » | Colonnaire, compresse, type, filtrable par statistiques de fichier : facteur 15 mesure sur ce jeu. |
 | « Vos donnees sont-elles realistes ? » | Generees avec saisonnalite, loi de Pareto et profil horaire ; panier median de 58 euros, conforme au secteur. |
 | « Pourquoi pas tout en meme temps ? » | Contrainte de 16 Go assumee, et rendue structurelle par les profils Compose — le fichier interdit de tout allumer. |
 

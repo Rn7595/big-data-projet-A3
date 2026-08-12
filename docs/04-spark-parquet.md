@@ -193,6 +193,13 @@ une partition par plage de jetons, on obtenait 143 fichiers de 46 Ko pour
 24 repertoires. Une redistribution sur les colonnes de partitionnement, juste
 avant l'ecriture, ramene le resultat a un fichier par repertoire.
 
+Le gain ne se limite pas au nombre de fichiers : la table de faits est passee
+de 6,6 Mo a 4,9 Mo, soit **25 % de moins pour exactement les memes donnees**.
+Les encodages de Parquet -- dictionnaire, repetitions -- operent par bloc de
+colonne : plus le bloc est grand, plus il y a de valeurs repetees a factoriser.
+Beaucoup de petits fichiers, c'est autant d'en-tetes dupliques et de
+dictionnaires trop courts pour amortir leur propre cout.
+
 ## Les sorties
 
 | Fichier Parquet | Grain | Usage |
