@@ -3,7 +3,7 @@ COMPOSE := docker compose
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install phase1 phase2 phase3 phase4 test \
+.PHONY: help install phase1 phase2 phase3 phase4 test tracer \
         oracle-up oracle-down cassandra-up cassandra-down elastic-up elastic-down \
         down status clean-data reset
 
@@ -21,6 +21,7 @@ help:
 	@echo "  make elastic-down    eteint la phase 4"
 	@echo "  make down            eteint tout ce qui traine"
 	@echo "  make test            controles de coherence entre les phases"
+	@echo "  make tracer CMD=35704  suit une commande a travers toutes les sources"
 	@echo "  make status          affiche les conteneurs en cours"
 	@echo "  make clean-data      supprime les artefacts de data/"
 	@echo "  make reset           supprime aussi les volumes Docker"
@@ -73,3 +74,8 @@ reset: down clean-data
 
 test:
 	python -m tests.test_coherence_pipeline
+
+# Trace une commande a travers toutes les sources disponibles :
+#   make tracer CMD=35704
+tracer:
+	python -m tests.tracer_commande $(CMD)
