@@ -190,14 +190,22 @@ def main() -> int:
     # se fait a l'euro pres sur les sources comparables.
     valeurs = sorted(montants.values())
     ecart = valeurs[-1] - valeurs[0]
+
+    if ecart == 0:
+        print(f"{len(montants)} sources interrogees : montant identique partout, "
+              f"{valeurs[0]} EUR.")
+        return 0
+
+    # Les montants Parquet et Elasticsearch portent sur les lignes seules,
+    # sans les frais de port que le total de commande inclut.
     if ecart <= Decimal("5.00"):
         print(f"{len(montants)} sources interrogees, ecart maximal {ecart} EUR.")
-        print("Les frais de port expliquent l'ecart residuel : ils sont inclus dans le")
-        print("total de commande, absents de la somme des lignes.")
-    else:
-        print(f"ECART ANORMAL entre les sources : {ecart} EUR")
-        return 1
-    return 0
+        print("Ecart attendu : les frais de port sont inclus dans le total de commande,")
+        print("absents de la somme des lignes.")
+        return 0
+
+    print(f"ECART ANORMAL entre les sources : {ecart} EUR")
+    return 1
 
 
 if __name__ == "__main__":
