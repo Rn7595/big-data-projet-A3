@@ -106,11 +106,18 @@ Genere par `pipeline/phase1_oracle/generate_data.py`, volumetrie pilotee par
 | `orders` | 60 000 |
 | `order_items` | ~149 000 |
 
-Volumes releves lors d'une execution reelle. L'extraction produit **59 701**
-documents et non 60 000 : les 299 commandes sans ligne sont ecartees par la
-jointure interne sur les lignes de commande. L'ecart est mesure et documente
+Volumes releves lors d'une execution reelle. L'extraction produit environ
+**59 700** documents et non 60 000 : les commandes sans ligne sont ecartees par
+la jointure interne sur les lignes de commande. L'ecart est mesure et documente
 par le controle informatif `commandes_sans_ligne`, precisement pour qu'il n'y
 ait rien a improviser si le jury le remarque.
+
+Les comptages exacts varient legerement d'une execution a l'autre : la fenetre
+de 24 mois se termine au jour de l'execution, si bien qu'un tirage decale
+change le detail des paniers. Ce qui ne varie pas, et qui seul importe, ce sont
+les **egalites** : commandes moins paniers vides egale documents extraits, et
+lignes de commande identiques aux quatre etapes du pipeline. Ce sont elles que
+verifie `make test`, pas des valeurs figees.
 
 **Pourquoi generer plutot que telecharger ?** Les jeux publics d'e-commerce
 sont presque toujours livres a plat, deja denormalises — les charger reviendrait
