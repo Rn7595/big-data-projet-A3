@@ -78,6 +78,29 @@ data/        artefacts intermediaires (ignore par git)
 tests/       controles de coherence entre les phases
 ```
 
+## Conformite au sujet
+
+| Etape demandee | Ou elle est traitee | Resultat concret |
+|---|---|---|
+| **1.** Theme au choix, source **SQL sous Oracle**, structure **normalisee** | `sql/01_schema.sql`, `sql/02_indexes.sql` | 8 tables en 3NF, 10 cles etrangeres, 40 categories, 800 produits, 5 000 clients, 60 000 commandes, 149 186 lignes |
+| Nettoyage des donnees (synopsis) | `sql/20_nettoyage.sql`, `sql/21_controles.sql`, `pipeline/phase1_oracle/data_quality.py` | 5 regles de normalisation, 8 controles dont 6 bloquants |
+| **2.** Denormaliser et extraire vers Cassandra **via un fichier JSON** | `sql/10_extract_orders.sql`, `pipeline/phase2_cassandra/` | `data/json/orders.jsonl` (59 667 documents, 76 Mo) puis 4 tables Cassandra |
+| **3.** Formater pour **Spark ou Parquet**, avec des fonctions Python d'analyse | `pipeline/phase3_spark/transforms.py`, `build_parquet.py` | `data/parquet/` : table de faits partitionnee + 3 agregats + segmentation RFM, 5 Mo |
+| **4.** Indexer dans **Elasticsearch**, exposer dans **Kibana** | `pipeline/phase4_elastic/`, `kibana/dashboard.ndjson` | 2 index (149 186 + 3 457 documents), tableau de bord de 8 panneaux |
+| Livrable : video de 10 minutes | `docs/06-script-video.md`, `docs/08-deroule-enregistrement.md` | deroule minute par minute |
+| Livrable : archive du code | commande de zip dans `docs/08` | archive sans `.git` ni donnees |
+
+Deux precisions sur les choix laisses libres par le sujet :
+
+- le sujet autorise « Parquet **ou** Spark » : les deux sont utilises, Spark
+  produisant le Parquet ;
+- pandas est cite comme une option (« you can also apply python packages like
+  pandas »). Il n'est pas utilise ici : la normalisation est faite en SQL a
+  l'etape 1, les transformations par PySpark a l'etape 3, et la relecture du
+  Parquet par PyArrow, qui lit par lots sans materialiser 149 000 lignes en
+  memoire. Charger le tout dans un DataFrame pandas aurait ete un choix
+  contraire a l'esprit du sujet.
+
 ## Documentation
 
 - [Architecture et execution sequentielle](docs/01-architecture.md)
