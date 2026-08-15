@@ -87,8 +87,6 @@ tests/       controles de coherence entre les phases
 | **2.** Denormaliser et extraire vers Cassandra **via un fichier JSON** | `sql/10_extract_orders.sql`, `pipeline/phase2_cassandra/` | `data/json/orders.jsonl` (59 667 documents, 76 Mo) puis 4 tables Cassandra |
 | **3.** Formater pour **Spark ou Parquet**, avec des fonctions Python d'analyse | `pipeline/phase3_spark/transforms.py`, `build_parquet.py` | `data/parquet/` : table de faits partitionnee + 3 agregats + segmentation RFM, 5 Mo |
 | **4.** Indexer dans **Elasticsearch**, exposer dans **Kibana** | `pipeline/phase4_elastic/`, `kibana/dashboard.ndjson` | 2 index (149 186 + 3 457 documents), tableau de bord de 8 panneaux |
-| Livrable : video de 10 minutes | `docs/06-script-video.md`, `docs/08-deroule-enregistrement.md` | deroule minute par minute |
-| Livrable : archive du code | commande de zip dans `docs/08` | archive sans `.git` ni donnees |
 
 Deux precisions sur les choix laisses libres par le sujet :
 
@@ -108,6 +106,3 @@ Deux precisions sur les choix laisses libres par le sujet :
 - [Modele Cassandra et denormalisation](docs/03-modele-cassandra.md)
 - [Formatage Spark et Parquet](docs/04-spark-parquet.md)
 - [Indexation Elasticsearch et dashboard Kibana](docs/05-elasticsearch-kibana.md)
-- [Script de la soutenance video](docs/06-script-video.md)
-- [Demonstrations interactives](docs/07-demonstration-live.md)
-- [Deroule operatoire de l enregistrement](docs/08-deroule-enregistrement.md)
