@@ -83,6 +83,12 @@ if ! docker ps --format '{{.Names}}' | grep -q '^bde-cassandra$'; then
   exit 1
 fi
 
+# Le conteneur peut tourner sans accepter encore de connexion : Cassandra met
+# une minute a ouvrir son port CQL, et davantage apres une mise en veille du
+# poste. Sans cette attente, Spark echoue sur une erreur de connexion alors que
+# la base allait etre prete quelques secondes plus tard.
+attendre_healthy bde-cassandra 300
+
 titre "Conversion Cassandra -> Parquet"
 python -m pipeline.phase3_spark.build_parquet
 
