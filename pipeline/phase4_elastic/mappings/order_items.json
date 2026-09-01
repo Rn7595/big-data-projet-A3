@@ -1,0 +1,53 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "refresh_interval": "5s"
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "order_id":             { "type": "integer" },
+      "line_no":              { "type": "short" },
+      "order_date":           { "type": "date" },
+      "order_date_day":       { "type": "date", "format": "yyyy-MM-dd" },
+      "order_year":           { "type": "short" },
+      "order_month":          { "type": "byte" },
+      "order_day":            { "type": "byte" },
+      "order_dow":            { "type": "keyword" },
+      "order_hour":           { "type": "byte" },
+      "year_month":           { "type": "keyword" },
+      "order_status":         { "type": "keyword" },
+      "is_revenue":           { "type": "boolean" },
+
+      "customer_id":          { "type": "integer" },
+      "loyalty_tier":         { "type": "keyword" },
+
+      "category_id":          { "type": "integer" },
+      "category_name":        { "type": "keyword" },
+      "parent_category_id":   { "type": "integer" },
+      "parent_category_name": { "type": "keyword" },
+
+      "product_id":           { "type": "integer" },
+      "sku":                  { "type": "keyword" },
+      "product_name": {
+        "type": "text",
+        "fields": {
+          "keyword": { "type": "keyword", "ignore_above": 256 }
+        }
+      },
+      "brand":                { "type": "keyword" },
+
+      "quantity":             { "type": "integer" },
+      "unit_price":           { "type": "scaled_float", "scaling_factor": 100 },
+      "discount_pct":         { "type": "scaled_float", "scaling_factor": 100 },
+      "line_amount":          { "type": "scaled_float", "scaling_factor": 100 },
+      "net_amount":           { "type": "scaled_float", "scaling_factor": 100 },
+
+      "country_code":         { "type": "keyword" },
+      "country_name":         { "type": "keyword" },
+      "region":               { "type": "keyword" },
+      "city":                 { "type": "keyword" }
+    }
+  }
+}
