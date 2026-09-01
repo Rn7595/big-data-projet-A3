@@ -96,7 +96,7 @@ SELECT column_name FROM user_tab_columns WHERE table_name = 'ORDERS';
 SELECT o.order_id,
        ROUND(SUM(oi.quantity * oi.unit_price * (1 - oi.discount_pct/100)), 2) AS total
 FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
-WHERE o.order_id = 35704
+WHERE o.order_id = 46463
 GROUP BY o.order_id;
 
 -- Le controle qu'aucune contrainte ne peut porter
@@ -161,8 +161,8 @@ SELECT order_ref FROM orders_by_customer WHERE order_status = 'DELIVERED'
 LIMIT 5 ALLOW FILTERING;
 
 -- Le total pre-calcule, et les lignes imbriquees
-SELECT order_ref, items_count, total_amount FROM order_by_id WHERE order_id = 35704;
-SELECT items FROM order_by_id WHERE order_id = 35704;
+SELECT order_ref, items_count, total_amount FROM order_by_id WHERE order_id = 46463;
+SELECT items FROM order_by_id WHERE order_id = 46463;
 
 exit
 ```
@@ -195,7 +195,7 @@ ls data/parquet/fact_order_items/order_year=2025/
 du -sh data/json/orders.jsonl data/parquet/fact_order_items
 ```
 
-> « 76 Mo de JSON, 5 Mo de Parquet. »
+> « 76 Mo de JSON, 5 Mo de Parquet : facteur 15,6. »
 
 Puis, dans PySpark :
 

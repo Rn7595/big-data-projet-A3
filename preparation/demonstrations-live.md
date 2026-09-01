@@ -56,7 +56,7 @@ SELECT column_name FROM user_tab_columns WHERE table_name = 'ORDERS';
 SELECT o.order_id,
        SUM(oi.quantity * oi.unit_price * (1 - oi.discount_pct/100)) AS total
 FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
-WHERE o.order_id = 4317
+WHERE o.order_id = 46463
 GROUP BY o.order_id;
 ```
 
@@ -150,14 +150,14 @@ La trace montre le nombre de partitions lues et le temps en microsecondes.
 ### Le total pre-calcule
 
 ```sql
-SELECT order_ref, items_count, total_amount FROM order_by_id WHERE order_id = 4317;
+SELECT order_ref, items_count, total_amount FROM order_by_id WHERE order_id = 46463;
 ```
 
 > « Le meme total qu'Oracle calculait par une jointure. Ici il est stocke : il a
 > ete calcule une fois, a l'ecriture. »
 
 ```sql
-SELECT items FROM order_by_id WHERE order_id = 4317;
+SELECT items FROM order_by_id WHERE order_id = 46463;
 ```
 
 > « Et les lignes de commande sont **dans** la ligne. Aucune jointure possible,
@@ -272,7 +272,7 @@ curl -s 'localhost:9200/ecom-order-items/_search?size=0' \
        "aggs":{"ca":{"sum":{"field":"net_amount"}}}}}}' | python3 -m json.tool | head -30
 ```
 
-> « Le champ `took` : quelques millisecondes pour agreger 149 000 documents. »
+> « Le champ `took` : quelques millisecondes pour agreger 149 300 documents. »
 
 ### Kibana, en interaction
 
@@ -294,7 +294,7 @@ Le plus convaincant visuellement :
 make test
 ```
 
-> « Sept controles, execution automatique. 149 215 lignes de commande dans
+> « Sept controles, execution automatique. 149 300 lignes de commande dans
 > Oracle, dans Cassandra, dans Parquet et dans Elasticsearch. Et le chiffre
 > d'affaires calcule par Spark egale celui calcule par Elasticsearch, par deux
 > chemins independants. »
@@ -305,7 +305,7 @@ make test
 
 Tapez chaque commande une fois a blanc. Deux raisons : verifier qu'elle passe
 sur votre jeu de donnees, et reperer les identifiants a utiliser (le
-`customer_id = 4317` de cet exemple n'existera pas forcement chez vous apres un
+`customer_id = 4317` et la commande `46463` de ces exemples n'existeront pas apres un
 nouveau chargement).
 
 Pour retrouver un identifiant valide :

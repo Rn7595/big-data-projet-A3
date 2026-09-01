@@ -16,7 +16,7 @@ d'exploration, celui que Kibana sait interroger.
 | Index | Grain | Documents |
 |---|---|---|
 | `ecom-order-items` | la ligne de commande | ~149 000 |
-| `ecom-customers` | le client | ~3 800 |
+| `ecom-customers` | le client | ~3 400 |
 
 **Pourquoi indexer le grain le plus fin plutot que les agregats ?** Parce
 qu'Elasticsearch sait agreger lui-meme. En indexant la ligne de commande,
