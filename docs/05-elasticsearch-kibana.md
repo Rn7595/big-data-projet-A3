@@ -34,8 +34,7 @@ pour verifier les totaux affiches par Kibana.
 
 Fichiers : `pipeline/phase4_elastic/mappings/*.json`.
 
-C'est le point technique a defendre sur cette phase. **Le mapping est declare,
-jamais devine.**
+Principe retenu : **le mapping est declare, jamais devine.**
 
 En mapping dynamique, Elasticsearch aurait typé :
 
@@ -73,8 +72,7 @@ minimum.
 
 L'identifiant est derive des cles metier plutot que genere par Elasticsearch.
 Consequence : **reindexer met a jour les documents existants au lieu d'en creer
-des doublons**. L'operation devient rejouable — ce qui compte quand on relance
-une demonstration trois fois avant l'enregistrement.
+des doublons**. L'operation est donc rejouable sans nettoyage prealable.
 
 ## Les controles
 

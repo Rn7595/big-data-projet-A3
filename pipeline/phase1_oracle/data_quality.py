@@ -13,7 +13,9 @@ origine. On corrige a la source, une fois.
 
 from __future__ import annotations
 
-from pipeline.config import SQL_DIR
+import json
+
+from pipeline.config import REPORT_DIR, SQL_DIR, ensure_dirs
 from pipeline.phase1_oracle import db
 from pipeline.utils import get_logger, step
 
@@ -75,13 +77,27 @@ def run_checks(connection) -> dict[str, int]:
 
 
 def main() -> None:
+    ensure_dirs()
     with db.connect() as connection:
         with step(LOGGER, "nettoyage des donnees"):
             corrections = clean(connection)
         LOGGER.info("Total corrige : %d ligne(s)", sum(corrections.values()))
 
         with step(LOGGER, "controles de qualite"):
-            run_checks(connection)
+            resultats = run_checks(connection)
+
+    # Le detail des controles est conserve, pas seulement affiche : les tests de
+    # coherence s'en servent pour verifier que l'ecart entre les commandes et
+    # les documents extraits correspond bien aux commandes sans ligne. Sans ce
+    # rapport, ce controle ne pourrait qu'affirmer l'explication sans l'etablir.
+    rapport = {
+        "corrections": corrections,
+        "corrections_total": sum(corrections.values()),
+        "controles": resultats,
+    }
+    fichier = REPORT_DIR / "phase1_qualite.json"
+    fichier.write_text(json.dumps(rapport, indent=2, ensure_ascii=False), encoding="utf-8")
+    LOGGER.info("Rapport de qualite ecrit dans %s", fichier)
     LOGGER.info("Donnees conformes, extraction possible")
 
 

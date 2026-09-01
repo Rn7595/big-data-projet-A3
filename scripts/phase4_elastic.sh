@@ -8,6 +8,19 @@ if [[ ! -d data/parquet/fact_order_items ]]; then
   exit 1
 fi
 
+# Symetrique de la garde de la phase 2 sur Oracle : la phase 4 ne lit que des
+# fichiers Parquet, aucun service de phase precedente n'a de raison de tourner
+# encore. Laisser Cassandra actif ferait cohabiter deux JVM lourdes sans
+# necessite.
+for conteneur in bde-oracle bde-cassandra; do
+  if docker ps --format '{{.Names}}' | grep -q "^${conteneur}$"; then
+    echo "Le conteneur ${conteneur} tourne encore. La phase 4 ne lit que des" >&2
+    echo "fichiers Parquet : eteignez-le avant de continuer." >&2
+    echo "    docker compose --profile ${conteneur#bde-} down" >&2
+    exit 1
+  fi
+done
+
 # Elasticsearch refuse de demarrer si le noyau hote limite le nombre de zones
 # memoire projetables. Le defaut d'un Codespace est tres en dessous du minimum
 # exige, et l'echec se produit APRES le demarrage du conteneur : sans ce

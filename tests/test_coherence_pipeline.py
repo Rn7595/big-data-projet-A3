@@ -4,9 +4,15 @@ Chaque phase ecrit un rapport dans data/reports/. Ce script les rapproche et
 verifie que la meme donnee se retrouve, en meme quantite, d'un bout a l'autre
 de la chaine.
 
-C'est la reponse a la question « comment savez-vous que rien n'a ete perdu
-entre Oracle et Kibana ? ». La reponse n'est pas « je l'ai regarde », mais
-« un controle automatique le verifie, et il echoue si ce n'est pas le cas ».
+Ces controles portent sur les volumetries et les montants agreges de
+l'ensemble des quatre phases. Ils sont complementaires de
+`tests/tracer_commande.py`, qui verifie une commande precise en interrogeant
+les sources une par une : le present module controle la chaine globalement, le
+second controle un cas particulier de bout en bout.
+
+Aucun controle ne peut etre marque reussi sans avoir effectivement compare deux
+valeurs : l'absence d'une donnee attendue provoque un echec, jamais un passage
+silencieux.
 
     python -m tests.test_coherence_pipeline
 
@@ -25,6 +31,7 @@ REPORTS = ROOT / "data" / "reports"
 
 RAPPORTS = {
     "phase1": "phase1_extraction.json",
+    "qualite": "phase1_qualite.json",
     "phase2": "phase2_chargement.json",
     "phase3": "phase3_parquet.json",
     "phase4": "phase4_indexation.json",
@@ -85,15 +92,30 @@ def test_ecart_commandes_explique() -> tuple[str, str]:
     Une commande vide ne produit pas de document : la jointure interne de la
     requete de denormalisation l'ecarte. L'ecart n'est donc pas une perte, mais
     il doit etre integralement explique.
+
+    Le nombre de commandes sans ligne provient du controle `commandes_sans_ligne`
+    execute sur Oracle en phase 1 et conserve dans le rapport de qualite. Le
+    comparer a l'ecart observe etablit l'explication au lieu de l'affirmer.
     """
     phase1 = charger("phase1")
+    controles = charger("qualite")["controles"]
+
     commandes = phase1["oracle_row_counts"]["orders"]
     documents = phase1["orders.jsonl"]["documents"]
     ecart = commandes - documents
 
+    assert "commandes_sans_ligne" in controles, (
+        "Le rapport de qualite ne contient pas le controle commandes_sans_ligne : "
+        "la phase 1 doit etre rejouee pour le produire.")
+    sans_ligne = controles["commandes_sans_ligne"]
+
     assert ecart >= 0, f"Plus de documents ({documents}) que de commandes ({commandes})"
+    assert ecart == sans_ligne, (
+        f"Ecart de {ecart} commandes non extraites, mais {sans_ligne} commandes "
+        f"sans ligne mesurees sur Oracle : l'ecart n'est pas integralement explique.")
+
     return ("ecart de commandes explique",
-            f"{commandes} commandes - {ecart} sans ligne = {documents} documents")
+            f"{commandes} commandes - {sans_ligne} sans ligne (mesurees) = {documents} documents")
 
 
 def test_produits_conserves() -> tuple[str, str]:
@@ -124,8 +146,13 @@ def test_chiffre_affaires_identique() -> tuple[str, str]:
     """
     spark = charger("phase3").get("chiffre_affaires")
     elastic = charger("phase4").get("chiffre_affaires")
-    if spark is None:
-        return ("chiffre d'affaires", "non compare (rapport de phase 3 anterieur)")
+
+    assert spark is not None, (
+        "Le rapport de phase 3 ne contient pas de chiffre d'affaires : "
+        "la phase 3 doit etre rejouee pour permettre la comparaison.")
+    assert elastic is not None, (
+        "Le rapport de phase 4 ne contient pas de chiffre d'affaires : "
+        "la phase 4 doit etre rejouee pour permettre la comparaison.")
 
     ecart = abs(float(spark) - float(elastic))
     assert ecart <= TOLERANCE_MONTANT, (
@@ -137,8 +164,9 @@ def test_chiffre_affaires_identique() -> tuple[str, str]:
 def test_compression_parquet() -> tuple[str, str]:
     """Parquet doit etre nettement plus compact que le JSON d'origine."""
     comparaison = charger("phase3").get("comparaison_formats")
-    if not comparaison:
-        return "compression", "non mesuree"
+    assert comparaison, (
+        "Le rapport de phase 3 ne contient pas de comparaison de formats : "
+        "la phase 1 puis la phase 3 doivent etre rejouees pour la produire.")
     ratio = comparaison["ratio"]
     assert ratio > 1, f"Parquet n'est pas plus compact (ratio {ratio})"
     return ("compression Parquet",
@@ -176,6 +204,7 @@ def main() -> int:
         print(f"{echecs} controle(s) en echec.")
         return 1
     print(f"{len(CONTROLES)} controles passes : la donnee traverse le pipeline sans perte.")
+    print("Controle complementaire sur une commande precise : make tracer CMD=<order_id>")
     return 0
 
 

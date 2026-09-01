@@ -15,16 +15,19 @@
   data/json/          tables denormalisees  data/parquet/       index + dashboard
 ```
 
-Chaque phase est un conteneur unique (sauf la phase 3, sans conteneur), allume
-puis eteint avant la suivante.
+Chaque phase repose sur un conteneur unique, a l'exception de la phase 3 qui
+s'execute en local. Les conteneurs sont eteints entre les phases, sauf
+Cassandra qui reste actif pendant la phase 3.
 
 ## Pourquoi l'execution peut etre sequentielle
 
-C'est la question que le jury posera en premier : comment convertir une base
-Oracle en base Cassandra si les deux ne tournent jamais ensemble ?
+Convertir une base Oracle en base Cassandra sans que les deux tournent
+simultanement est possible parce qu'**elles ne se connectent jamais l'une a
+l'autre** : le passage de temoin entre ces deux phases est un fichier sur
+disque.
 
-Parce qu'elles ne se parlent jamais. **Le passage de temoin entre deux phases
-est un fichier sur disque, pas une connexion.**
+Cette propriete ne vaut pas pour toutes les etapes. Le tableau ci-dessous
+precise, pour chacune, la nature de l'entree.
 
 | Phase | Conteneur allume | Entree | Sortie |
 |-------|------------------|--------|--------|
@@ -62,7 +65,7 @@ Si les quatre phases tournaient ensemble, le total declare atteindrait 11,5 Go,
 auxquels s'ajouteraient les JVM locales : la machine tiendrait mal. En
 sequentiel, on ne depasse jamais 5 Go.
 
-## Ce que les profils Compose garantissent
+## Ce que les profils Compose apportent
 
 Les services portent tous un `profiles:`. Consequence : `docker compose up`
 sans argument ne demarre **rien**. Il faut nommer la phase.
@@ -73,9 +76,18 @@ docker compose --profile oracle down        # extinction
 docker compose --profile cassandra up -d    # phase 2
 ```
 
-La contrainte de sequentialite n'est donc pas une regle de conduite que
-l'operateur doit se rappeler : elle est portee par le fichier de configuration.
-Il n'existe aucune commande courte qui allume tout par inadvertance.
+Les profils separent les groupes de services et reduisent le risque d'un
+demarrage involontaire : aucune commande courte n'allume l'ensemble des
+conteneurs. Ils n'empechent pas pour autant d'activer plusieurs profils
+successivement sans arreter les precedents.
+
+La sequentialite complete repose donc sur trois elements complementaires :
+
+| Element | Ce qu'il garantit |
+|---|---|
+| Les profils Compose | aucun demarrage global involontaire |
+| Les gardes des scripts de phase | refus de demarrer si un service incompatible est encore actif |
+| Les commandes d'arret entre les etapes | l'extinction effective, rappelee en fin de chaque script |
 
 Les volumes sont nommes (`oracle_data`, `cassandra_data`, `es_data`,
 `kibana_data`) : eteindre une phase n'efface pas ses donnees. On peut revenir

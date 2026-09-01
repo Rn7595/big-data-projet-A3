@@ -302,16 +302,23 @@ Le zip a rendre :
 ```bash
 cd ..
 zip -r projet-bigdata-ecommerce.zip big-data-projet-A3 \
-  -x '*/.git/*' '*/data/*' '*/__pycache__/*' '*/logs-*.txt' '*/preparation/*'
+  -x '*/.git/*' '*/.env' '*/data/*' '*/__pycache__/*' '*/.pytest_cache/*' \
+     '*/logs-*.txt' '*/preparation/*'
 ls -lh projet-bigdata-ecommerce.zip
 ```
 
-L'exclusion de `preparation/` est volontaire : ce dossier contient les notes de
-soutenance, qui ne font pas partie du livrable. Verifier avant d'envoyer :
+Deux exclusions sont importantes :
+
+- `preparation/` contient les notes de soutenance, qui ne font pas partie du
+  livrable ;
+- **`.env` contient les identifiants de connexion** et n'a rien a faire dans
+  une archive remise. Seul `.env.example` est livre.
+
+Verifier avant d'envoyer :
 
 ```bash
-unzip -l projet-bigdata-ecommerce.zip | grep -c preparation   # doit afficher 0
-unzip -l projet-bigdata-ecommerce.zip | head -30
+unzip -l projet-bigdata-ecommerce.zip | grep -cE 'preparation|/\.env$'   # doit afficher 0
+unzip -l projet-bigdata-ecommerce.zip
 ```
 
 Le telecharger : clic droit sur le fichier dans l'explorateur VS Code,

@@ -1,8 +1,7 @@
 # Phase 2 — Modele Cassandra et denormalisation
 
-C'est le coeur du projet, et la partie sur laquelle un jury insistera. Elle
-repond a une seule question : **comment passe-t-on d'un schema concu pour
-eviter la redondance a un schema concu pour eviter les jointures ?**
+Cette phase repond a une seule question : **comment passe-t-on d'un schema
+concu pour eviter la redondance a un schema concu pour eviter les jointures ?**
 
 ## Le renversement de methode
 
@@ -20,7 +19,7 @@ cinquieme requete apparait, on cree une cinquieme table.
 
 ## Comment fonctionne une cle primaire Cassandra
 
-Indispensable a maitriser pour defendre les choix qui suivent.
+Ce fonctionnement conditionne les choix decrits ensuite.
 
 ```
 PRIMARY KEY ( (cle_de_partition) , colonne_clustering_1, colonne_clustering_2 )
@@ -90,8 +89,7 @@ distribuee ne l'est pas.
 PRIMARY KEY ((category_id, year_month), order_date, order_id, line_no)
 ```
 
-**La cle de partition est composite, et c'est le point le plus interessant du
-modele.**
+**La cle de partition est composite.**
 
 Partitionner par la seule `category_id` donnerait 32 partitions qui
 grossiraient indefiniment au fil des mois. Au bout de quelques annees, une
@@ -123,9 +121,10 @@ hierarchie des categories — exprimee en SQL par une cle etrangere reflexive �
 est aplatie en deux colonnes : CQL n'a pas d'equivalent de la requete
 recursive.
 
-## Les anti-patterns a savoir nommer
+## Les anti-patterns ecartes
 
-Si on te demande « pourquoi pas autrement ? », ce sont ces trois reponses :
+Trois modelisations alternatives ont ete ecartees, pour les raisons
+suivantes :
 
 | Choix | Pourquoi c'est mauvais |
 |---|---|
@@ -153,7 +152,7 @@ pour une donnee mise a jour element par element.
 
 ## Ce que l'on a perdu
 
-Question probable du jury. Reponse honnete :
+Le modele a un cout, qu'il faut enoncer :
 
 - **l'integrite referentielle** — plus aucune cle etrangere. Si un nom de
   produit change, les commandes passees gardent l'ancien. Ici c'est voulu
@@ -217,7 +216,7 @@ make phase2    # ou : ./scripts/phase2_cassandra.sh
 ```
 
 Le script enchaine creation du modele, chargement, puis **execute les quatre
-requetes** et affiche leurs resultats — c'est la sequence a montrer en video.
+requetes** et affiche leurs resultats.
 
 ```bash
 python -m pipeline.phase2_cassandra.demo_queries   # les 4 requetes seules

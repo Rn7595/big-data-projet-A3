@@ -5,10 +5,11 @@ relationnelle jusqu'a un tableau de bord :
 
 **Oracle (SQL, 3NF) → JSON denormalise → Cassandra → PySpark / Parquet → Elasticsearch → Kibana**
 
-Le pipeline s'execute **une phase a la fois** : chaque brique est demarree,
-utilisee, puis eteinte avant la suivante. Deux phases ne tournent jamais
-ensemble, ce qui permet de faire tenir l'ensemble dans un GitHub Codespace de
-16 Go.
+Les services lourds sont executes sequentiellement afin de limiter la
+consommation memoire : chaque brique est demarree, utilisee, puis eteinte avant
+la suivante. Cassandra reste toutefois active pendant la phase Spark, car Spark
+lit directement ses tables avant de produire les fichiers Parquet. L'ensemble
+tient ainsi dans un GitHub Codespace de 16 Go.
 
 ## Prerequis
 
@@ -62,8 +63,15 @@ pic memoire reste maitrise.
 | 3 — Formatage | aucun (PySpark local) | Cassandra | `data/parquet/` |
 | 4 — Indexation | Elasticsearch + Kibana | `data/parquet/` | index + dashboard |
 
-Aucune phase ne se connecte a la precedente : le passage de temoin se fait par
-des fichiers sur disque.
+Le passage d'une phase a la suivante se fait de deux manieres :
+
+- **Oracle vers Cassandra** : par des fichiers JSON Lines. Les deux bases ne se
+  connectent jamais entre elles, Oracle peut donc etre eteint avant que
+  Cassandra ne demarre ;
+- **Cassandra vers Spark** : par une connexion directe, via le connecteur
+  Spark-Cassandra. C'est la seule etape ou une base est lue en direct, et donc
+  la seule ou un service reste actif pendant le traitement suivant ;
+- **Spark vers Elasticsearch** : par des fichiers Parquet.
 
 ## Structure
 

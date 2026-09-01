@@ -51,14 +51,13 @@ transitive `address_id → country_code → country_name` : le libelle « France
 serait recopie des milliers de fois, et le renommer demanderait de parcourir la
 table. Un referentiel de 8 lignes supprime le probleme.
 
-### Trois choix qu'un jury peut contester
+### Trois choix de modelisation discutables
 
 **Le montant total n'est pas stocke dans `ORDERS`.** Il se deduit des lignes.
 Le stocker serait une redondance calculable, donc une violation, et surtout un
-risque d'incoherence si une ligne est modifiee sans recalcul. C'est un point
-essentiel pour la suite : ce total, on le calculera **une fois** au moment de
-la denormalisation vers Cassandra. Le contraste entre les deux modeles tient
-tout entier dans cette phrase.
+risque d'incoherence si une ligne est modifiee sans recalcul. Ce total sera calcule **une fois**, au
+moment de la denormalisation vers Cassandra : c'est la difference de principe
+entre les deux modeles.
 
 **`unit_price` apparait dans `PRODUCTS` et dans `ORDER_ITEMS`.** Ce n'est pas
 une redondance mais une **historisation**. `PRODUCTS.unit_price` est le prix
@@ -110,7 +109,7 @@ Volumes releves lors d'une execution reelle. L'extraction produit environ
 **59 700** documents et non 60 000 : les commandes sans ligne sont ecartees par
 la jointure interne sur les lignes de commande. L'ecart est mesure et documente
 par le controle informatif `commandes_sans_ligne`, precisement pour qu'il n'y
-ait rien a improviser si le jury le remarque.
+ait pas d'ecart inexplique entre les volumetries.
 
 Les comptages exacts varient legerement d'une execution a l'autre : la fenetre
 de 24 mois se termine au jour de l'execution, si bien qu'un tirage decale
@@ -151,8 +150,8 @@ l'etape de nettoyage ait un effet mesurable et non un passage a vide.
 Cinq regles de normalisation, puis huit controles dont six **bloquants** : si
 l'un d'eux remonte une ligne, le pipeline s'arrete avant l'extraction.
 
-Deux controles meritent d'etre cites en soutenance, parce qu'ils expriment des
-regles qu'**aucune contrainte declarative ne peut porter** :
+Deux controles expriment des regles qu'**aucune contrainte declarative ne peut
+porter** :
 
 - `adresse_livraison_etrangere_au_client` : une cle etrangere garantit que
   l'adresse de livraison existe, pas qu'elle appartient au client de la

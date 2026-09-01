@@ -11,8 +11,7 @@ partition ; une agregation transverse imposerait de balayer tout le cluster.
 donnees en parallele, calcule les agregats que Cassandra refuse, et les ecrit
 dans un format concu pour l'analyse : Parquet.
 
-L'enchainement des trois phases raconte donc une progression, et c'est ainsi
-qu'il faut le presenter :
+Les trois phases repondent donc a des besoins distincts :
 
 | | Optimise pour | Question type |
 |---|---|---|
@@ -23,14 +22,13 @@ qu'il faut le presenter :
 ## Pourquoi Spark en local, sans conteneur
 
 `master("local[*]")` : le pilote et les executeurs vivent dans un seul
-processus JVM, qui utilise tous les coeurs disponibles. Pour 149 000 lignes, un
-cluster serait du folklore — le cout de coordination reseau depasserait
-largement le gain de parallelisme.
+processus JVM, qui utilise tous les coeurs disponibles. Pour ce volume de
+donnees, l'execution locale evite le cout de coordination reseau d'un cluster
+distribue, qui depasserait le gain de parallelisme.
 
-L'argument a tenir en soutenance est celui-ci : **le code est identique a
-celui d'un cluster.** Passer sur un vrai cluster ne demanderait que de changer
-l'URL du maitre. Aucune ligne de transformation ne bougerait. C'est tout
-l'interet de l'abstraction DataFrame.
+**Le code reste identique a celui d'un cluster.** Passer sur un cluster reel ne
+demanderait que de changer l'URL du maitre : aucune ligne de transformation ne
+bougerait. C'est l'interet de l'abstraction DataFrame.
 
 Cela sert aussi la contrainte memoire : pas de conteneur Spark, donc rien a
 allumer en plus de Cassandra.
@@ -79,7 +77,7 @@ Fichier : `pipeline/phase3_spark/transforms.py`. Chaque fonction prend un
 DataFrame et en renvoie un autre, sans effet de bord : elles s'enchainent et se
 testent une par une.
 
-### La regle metier a defendre
+### La regle metier retenue
 
 ```python
 REVENUE_STATUSES = ["PAID", "SHIPPED", "DELIVERED"]
@@ -92,8 +90,8 @@ d'environ 17 % dans ce jeu de donnees.
 **Les lignes ne sont pas supprimees pour autant** : elles restent dans la table
 de faits, marquees par une colonne booleenne `is_revenue`, et une colonne
 `net_amount` vaut zero pour elles. On peut ainsi analyser le taux d'annulation
-sans avoir a recharger quoi que ce soit. C'est la difference entre filtrer et
-qualifier — et c'est le genre de nuance qu'un jury apprecie.
+sans avoir a recharger quoi que ce soit : on qualifie la donnee au lieu de la
+filtrer.
 
 ### Les colonnes calendaires
 
@@ -111,7 +109,7 @@ Les trois mesures sont converties en scores de 1 a 5 **par quintiles**
 independante de la devise, du volume et de la periode. Elle reste valable si le
 jeu de donnees change d'echelle, la ou des seuils en dur seraient a reregler.
 
-Deux details a savoir justifier :
+Deux details de mise en oeuvre :
 
 - **la recence est inversee** — peu de jours depuis le dernier achat est un bon
   signe, donc un score eleve. D'ou le `6 - score` ;
@@ -211,8 +209,7 @@ dictionnaires trop courts pour amortir leur propre cout.
 | `dim_customers_rfm` | le client | segmentation, indexee en phase 4 |
 
 Le script mesure et journalise le rapport de taille entre le JSON de la phase 1
-et le Parquet produit. **C'est le chiffre a montrer en soutenance** pour
-justifier le passage au colonnaire.
+et le Parquet produit, ce qui quantifie le gain du format colonnaire.
 
 ## Commandes
 

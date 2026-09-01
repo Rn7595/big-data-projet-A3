@@ -20,8 +20,8 @@ help:
 	@echo "  make cassandra-down  eteint la phase 2"
 	@echo "  make elastic-down    eteint la phase 4"
 	@echo "  make down            eteint tout ce qui traine"
-	@echo "  make test            controles de coherence entre les phases"
-	@echo "  make tracer CMD=35704  suit une commande a travers toutes les sources"
+	@echo "  make test            controle global : coherence des quatre phases"
+	@echo "  make tracer CMD=<id> controle complementaire : une commande, toutes les sources"
 	@echo "  make status          affiche les conteneurs en cours"
 	@echo "  make clean-data      supprime les artefacts de data/"
 	@echo "  make reset           supprime aussi les volumes Docker"
@@ -75,7 +75,8 @@ reset: down clean-data
 test:
 	python -m tests.test_coherence_pipeline
 
-# Trace une commande a travers toutes les sources disponibles :
-#   make tracer CMD=35704
+# Controle complementaire de `make test` : au lieu de comparer les volumetries
+# globales, suit une commande precise a travers chaque source disponible.
+#   make tracer CMD=<order_id>
 tracer:
 	python -m tests.tracer_commande $(CMD)
