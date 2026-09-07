@@ -14,8 +14,8 @@
 -- Chaque instruction est nommee par un marqueur "-- @name:" exploite par le
 -- lanceur Python, qui journalise le nombre de lignes corrigees par regle.
 --
--- Note : normaliser l'email en minuscules ne peut pas creer de doublon, la
--- contrainte UNIQUE portant deja sur des adresses distinctes hors casse.
+-- Le generateur garantit l'unicite des emails apres normalisation. Une simple
+-- contrainte UNIQUE sensible a la casse ne suffirait pas sur des donnees externes.
 -- ---------------------------------------------------------------------------
 
 -- @name: emails_normalises

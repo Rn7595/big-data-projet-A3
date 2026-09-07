@@ -50,10 +50,10 @@ def connect() -> Elasticsearch:
 def create_index(client: Elasticsearch, index: str, mapping_file: str) -> None:
     """Recree un index a partir de son mapping explicite.
 
-    Le mapping est declare, jamais devine. En mapping dynamique,
-    Elasticsearch aurait typé les identifiants numeriques en `long` et les
-    libelles en `text`, ce qui les rendrait inutilisables comme critere de
-    regroupement dans Kibana. `dynamic: strict` fait echouer l'indexation d'un
+    Le mapping fixe les types des identifiants, montants, dates et libelles.
+    Les champs keyword servent aux regroupements, le texte a la recherche.
+    Le mapping dynamique peut deja creer un sous-champ keyword ; l'interet
+    ici est de controler explicitement le schema et les montants. `dynamic: strict` fait echouer l'indexation d'un
     champ non declare, plutot que de l'accepter silencieusement : une colonne
     ajoutee en amont sans mise a jour du mapping se voit immediatement.
     """

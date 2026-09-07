@@ -1,7 +1,7 @@
 -- ---------------------------------------------------------------------------
 -- REQUETE DE DENORMALISATION -- coeur de l'etape 2 du sujet.
 --
--- Elle transforme six tables relationnelles en un document JSON autonome par
+-- Elle transforme huit tables relationnelles en un document JSON autonome par
 -- commande. Le travail est fait par Oracle lui-meme, avec le SQL/JSON normalise
 -- (JSON_OBJECT, JSON_ARRAYAGG) : Python ne fait que lire des lignes et les
 -- ecrire sur disque, il ne reconstruit aucune structure. La logique de
@@ -20,8 +20,8 @@
 --    l'en-tete : une commande complete = une seule lecture, un seul noeud.
 --
 -- 3. Pre-calcul des agregats. total_amount, total_quantity et items_count sont
---    volontairement absents du schema Oracle (ils sont derivables, donc les
---    stocker violerait la 3NF). Ils sont calcules ici, une fois, a l'ecriture.
+--    volontairement absents du schema Oracle pour eviter les redondances et
+--    les recalculs lors d'une mise a jour. Ils sont materialises a l'extraction.
 --    C'est le compromis NoSQL assume : on paie au chargement ce qu'on ne veut
 --    plus payer a chaque lecture.
 --
@@ -30,8 +30,8 @@
 -- des commandes.
 --
 -- RETURNING CLOB est indispensable : sans lui, JSON_OBJECT et JSON_ARRAYAGG
--- retournent du VARCHAR2(4000) et tronquent silencieusement les commandes
--- comportant beaucoup de lignes.
+-- retournent par defaut un VARCHAR2 limite a 4000 octets. CLOB permet de
+-- produire les documents volumineux sans cette limite.
 --
 -- FORMAT JSON signale a JSON_OBJECT que items_json est deja du JSON : sans ce
 -- mot cle, le tableau serait insere comme une chaine de caracteres echappee.

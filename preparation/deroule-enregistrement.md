@@ -58,7 +58,7 @@ docker compose up -d
 Aucun conteneur ne demarre : sans profil nomme, Compose n'a rien a lancer.
 
 > « La sequentialite n'est pas une regle que je dois me rappeler : le fichier
-> rend impossible de tout allumer par megarde. »
+> réduit le risque de démarrer par mégarde des services incompatibles. »
 
 ---
 
@@ -94,12 +94,13 @@ SELECT column_name FROM user_tab_columns WHERE table_name = 'ORDERS';
 
 -- Donc il faut calculer le total
 SELECT o.order_id,
-       ROUND(SUM(oi.quantity * oi.unit_price * (1 - oi.discount_pct/100)), 2) AS total
+       SUM(ROUND(oi.quantity * oi.unit_price * (1 - oi.discount_pct/100), 2))
+         + MAX(o.shipping_amount) AS total
 FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
 WHERE o.order_id = 46463
 GROUP BY o.order_id;
 
--- Le controle qu'aucune contrainte ne peut porter
+-- Le controle d'appartenance de l'adresse au client
 SELECT COUNT(*) AS adresses_incoherentes
 FROM orders o JOIN addresses a ON a.address_id = o.shipping_address_id
 WHERE a.customer_id <> o.customer_id;
@@ -271,7 +272,8 @@ Pointer le champ `took` : quelques millisecondes.
 **Kibana**, onglet PORTS de VS Code, port 5601, icone du globe. Puis :
 
 1. menu, **Dashboards**, ouvrir le tableau de bord ;
-2. cliquer sur un secteur du camembert : tous les panneaux se filtrent ;
+2. cliquer sur un secteur du camembert et observer les panneaux de ventes ;
+   la segmentation RFM est un instantane issu d'un autre index ;
 3. retirer le filtre, taper dans la barre : `brand : "Nexora"` puis Entree ;
 4. changer la periode en haut a droite.
 
@@ -288,8 +290,9 @@ make status
 make test
 ```
 
-> « Sept controles. La donnee traverse la chaine sans perte, et deux moteurs
-> independants trouvent le meme chiffre d'affaires. »
+> « Sept controles : les comptages et montants des rapports de cette execution
+> sont coherents. Spark et Elasticsearch retrouvent le meme chiffre d'affaires
+> en agregeant le meme champ net_amount. »
 
 C'est la derniere image de la video.
 
@@ -297,15 +300,23 @@ C'est la derniere image de la video.
 
 ## Apres l'enregistrement
 
+Creer une archive neuve, avec un nom non encore utilise : `zip` mettrait sinon
+une ancienne archive a jour sans supprimer ses fichiers devenus exclus.
+Verifier aussi que les dependances et caches ne sont pas inclus.
+
 Le zip a rendre :
 
 ```bash
 cd ..
 zip -r projet-bigdata-ecommerce.zip big-data-projet-A3 \
   -x '*/.git/*' '*/.env' '*/data/*' '*/__pycache__/*' '*/.pytest_cache/*' \
-     '*/logs-*.txt' '*/preparation/*'
+     '*/logs-*.txt' '*/preparation/*' '*/.venv/*' '*/venv/*'
 ls -lh projet-bigdata-ecommerce.zip
 ```
+
+Le mail demande aussi un rapport de 20 pages maximum ; le depot du rapport,
+du code et de la video est a preparer pour le 15 septembre 2026, avant la
+soutenance annoncee. Les notes de ce dossier ne remplacent pas ce rapport.
 
 Deux exclusions sont importantes :
 

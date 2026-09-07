@@ -2,14 +2,13 @@
 
 ## Ce que fait cette phase
 
-Cassandra sait repondre vite aux quatre questions pour lesquelles il a ete
-modelise. Il ne sait pas repondre a « quel est le chiffre d'affaires total par
-mois, tous rayons confondus ». Un `SUM` n'est possible qu'a l'interieur d'une
-partition ; une agregation transverse imposerait de balayer tout le cluster.
+Cassandra repond aux quatre requetes ciblees par le modele. Une somme CQL peut
+porter sur plusieurs partitions, mais une analyse globale impose alors une
+lecture etendue de la table. Le modele est optimise pour les acces par client
+ou par categorie et mois, pas pour toutes les analyses transverses.
 
-**C'est exactement le trou que Spark comble.** Il lit l'integralite des
-donnees en parallele, calcule les agregats que Cassandra refuse, et les ecrit
-dans un format concu pour l'analyse : Parquet.
+Spark lit ces donnees en parallele, calcule les agregats et les ecrit dans un
+format concu pour l'analyse : Parquet.
 
 Les trois phases repondent donc a des besoins distincts :
 
@@ -83,8 +82,9 @@ testent une par une.
 REVENUE_STATUSES = ["PAID", "SHIPPED", "DELIVERED"]
 ```
 
-Une commande annulee ou retournee n'a jamais produit de recette ; une commande
-en attente n'est pas encore payee. Les compter gonflerait le chiffre d'affaires
+Dans la regle simplifiee du projet, les commandes annulees, retournees ou en
+attente ne contribuent pas au CA net des articles. Les frais de port ne sont
+pas inclus dans cet indicateur. Les compter gonflerait le chiffre d'affaires
 d'environ 17 % dans ce jeu de donnees.
 
 **Les lignes ne sont pas supprimees pour autant** : elles restent dans la table
@@ -92,6 +92,25 @@ de faits, marquees par une colonne booleenne `is_revenue`, et une colonne
 `net_amount` vaut zero pour elles. On peut ainsi analyser le taux d'annulation
 sans avoir a recharger quoi que ce soit : on qualifie la donnee au lieu de la
 filtrer.
+
+### Les indicateurs mensuels
+
+Dans `agg_sales_by_month`, le CA porte sur les articles apres remise, hors
+frais de port, pour les statuts `PAID`, `SHIPPED` et `DELIVERED`.
+Les commandes, articles et clients sont en revanche comptes tous statuts
+confondus : ils decrivent l'activite, y compris les commandes sans CA.
+
+| Colonne | Definition |
+|---|---|
+| `nb_lignes_sans_ca` | Lignes `PENDING`, `CANCELLED` ou `RETURNED` ; ce ne sont pas uniquement des annulations |
+| `ca_moyen_par_commande` | CA net du mois / nombre de commandes distinctes du mois, tous statuts confondus |
+| `panier_moyen` dans `dim_customers_rfm` | CA net du client / ses commandes distinctes generant du CA |
+
+Les deux premiers noms remplacent respectivement `nb_lignes_annulees` et
+`panier_moyen` dans l'agregat mensuel, sans changer les valeurs calculees.
+Ils s'appliquent aux fichiers nouvellement generes par la phase 3. Les anciens
+fichiers Parquet conservent leurs anciens noms jusqu'a leur regeneration.
+Aucun champ des deux index Elasticsearch n'est renomme.
 
 ### Les colonnes calendaires
 
@@ -120,7 +139,8 @@ Deux details de mise en oeuvre :
 Six segments en sortent : Champions, Fideles, Nouveaux, A reconquerir,
 Endormis, A surveiller.
 
-Deux points de vigilance, verifies par les tests :
+Deux choix de transformation ; les tests de regression verifient le perimetre
+du panier RFM sur un petit jeu, et `make test` compare les comptages produits :
 
 - **une ligne par client, et une seule.** Le regroupement porte sur le seul
   `customer_id`. Y ajouter les attributs descriptifs (fidelite, pays) serait

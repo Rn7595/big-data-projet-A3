@@ -83,7 +83,11 @@ Le cout est un doublement du volume et deux ecritures au lieu d'une. **C'est le
 compromis explicite du modele** : le stockage est bon marche, la lecture
 distribuee ne l'est pas.
 
-### Q3 — le chiffre d'affaires par categorie et par mois
+### Q3 — le montant des articles par categorie et par mois
+
+Cette requete somme `line_amount` tous statuts confondus, hors frais de port.
+Le CA net de Spark et Kibana applique en plus la selection des statuts generant
+une recette : ces deux indicateurs n'ont donc pas le meme perimetre.
 
 ```cql
 PRIMARY KEY ((category_id, year_month), order_date, order_id, line_no)
@@ -159,11 +163,12 @@ Le modele a un cout, qu'il faut enoncer :
   (c'est de l'historisation), mais rien ne l'impose plus techniquement ;
 - **les requetes imprevues** — toute question non anticipee exige une nouvelle
   table et un rechargement. En SQL, il aurait suffi d'ecrire une requete ;
-- **l'unicite de la verite** — la meme commande existe dans deux tables. Une
-  ecriture partielle les desynchronise, et rien ne le detectera ;
-- **les agregats libres** — `SUM` n'est possible qu'a l'interieur d'une
-  partition. C'est precisement pour cela que la phase 3 existe : Spark prend en
-  charge les agregations transverses que Cassandra refuse.
+- **la coherence automatique des copies** — la meme commande existe dans deux
+  tables. Une ecriture partielle peut les desynchroniser : il faut des controles
+  applicatifs, comme les comptages du chargeur et le traceur complementaire ;
+- **les analyses transverses efficaces** — une somme CQL n'est pas limitee par
+  principe a une partition, mais une agregation non ciblee peut balayer toute
+  la table. Spark prend en charge ces analyses sur l'ensemble des donnees.
 
 Ce qu'on a gagne en echange : des lectures a une seule partition, un tri
 gratuit, et une montee en charge horizontale.

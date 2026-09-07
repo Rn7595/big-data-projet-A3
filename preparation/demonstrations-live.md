@@ -54,7 +54,8 @@ SELECT column_name FROM user_tab_columns WHERE table_name = 'ORDERS';
 
 ```sql
 SELECT o.order_id,
-       SUM(oi.quantity * oi.unit_price * (1 - oi.discount_pct/100)) AS total
+       SUM(ROUND(oi.quantity * oi.unit_price * (1 - oi.discount_pct/100), 2))
+         + MAX(o.shipping_amount) AS total
 FROM orders o JOIN order_items oi ON oi.order_id = o.order_id
 WHERE o.order_id = 46463
 GROUP BY o.order_id;
@@ -63,7 +64,7 @@ GROUP BY o.order_id;
 > « Une jointure et une agregation, a chaque lecture. Retenez ce chiffre : on
 > va le retrouver deja calcule dans Cassandra. »
 
-### Le controle qu'aucune contrainte ne peut porter
+### Le controle d'appartenance de l'adresse au client
 
 ```sql
 SELECT COUNT(*) FROM orders o
@@ -294,10 +295,10 @@ Le plus convaincant visuellement :
 make test
 ```
 
-> « Sept controles, execution automatique. 149 300 lignes de commande dans
-> Oracle, dans Cassandra, dans Parquet et dans Elasticsearch. Et le chiffre
-> d'affaires calcule par Spark egale celui calcule par Elasticsearch, par deux
-> chemins independants. »
+> « Les sept controles comparent les rapports enregistres pendant l'execution.
+> Ils retrouvent 149 300 lignes aux quatre etapes et le meme chiffre d'affaires
+> agrege par Spark et Elasticsearch. Ce sont des controles de comptages et de
+> montants, pas une verification de chaque champ. »
 
 ---
 

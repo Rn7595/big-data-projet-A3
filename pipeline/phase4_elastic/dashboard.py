@@ -1,9 +1,9 @@
 """Creation des vues de donnees Kibana et du tableau de bord.
 
 Le tableau de bord est genere par code plutot que construit a la souris. La
-raison est la reproductibilite : un dashboard dessine dans l'interface vit dans
-la base interne de Kibana et disparait avec le conteneur. Ici, il est decrit
-dans le depot, versionne, et reconstruit a l'identique par une commande.
+raison est la reproductibilite : les objets Kibana persistent dans
+Elasticsearch tant que son volume est conserve. Leur definition dans le depot
+permet aussi de reconstruire le dashboard sur une installation neuve.
 
 Trois sous-commandes :
 

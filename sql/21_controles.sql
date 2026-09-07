@@ -9,8 +9,8 @@
 --     changent les volumetries d'une phase a l'autre. Les documenter evite
 --     d'avoir a justifier un ecart de comptage pendant la soutenance.
 --
--- Interet des controles 3 et 4 : ils expriment des regles metier qu'aucune
--- contrainte declarative ne peut porter. Une cle etrangere garantit que
+-- Interet des controles 3 et 4 : ils expriment des regles metier non couvertes
+-- par les cles etrangeres simples et les CHECK declares dans ce schema. Une cle etrangere garantit que
 -- l'adresse de livraison existe, pas qu'elle appartient au client de la
 -- commande. Ce sont les erreurs que seul un controle explicite attrape.
 -- ---------------------------------------------------------------------------

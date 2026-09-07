@@ -34,7 +34,7 @@ python -m pipeline.phase2_cassandra.demo_queries
 cat <<'EOF'
 
 Phase terminee. Cassandra reste allume : la phase 3 lit ces tables avec Spark.
-C'est le script de la phase 3 qui l'eteindra une fois le Parquet ecrit.
+Apres la phase 3, lancez make cassandra-down une fois le Parquet ecrit.
 
     make phase3
 

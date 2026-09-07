@@ -54,8 +54,8 @@ table. Un referentiel de 8 lignes supprime le probleme.
 ### Trois choix de modelisation discutables
 
 **Le montant total n'est pas stocke dans `ORDERS`.** Il se deduit des lignes.
-Le stocker serait une redondance calculable, donc une violation, et surtout un
-risque d'incoherence si une ligne est modifiee sans recalcul. Ce total sera calcule **une fois**, au
+Le stocker ajouterait une redondance calculable et un risque d'incoherence
+si une ligne est modifiee sans recalcul. Ce total sera calcule **une fois**, au
 moment de la denormalisation vers Cassandra : c'est la difference de principe
 entre les deux modeles.
 
@@ -76,11 +76,11 @@ region), d'ou la difference de traitement.
 
 Fichier : `sql/02_indexes.sql`.
 
-Oracle **n'indexe pas** automatiquement les cles etrangeres — contrairement a
-MySQL. Deux consequences : toute modification d'une ligne mere pose un verrou
-sur la table fille, et les jointures degenerent en balayage complet. Les six
-index de cles etrangeres sont donc indispensables a la requete de
-denormalisation, qui joint six tables sur 60 000 commandes.
+Le schema declare explicitement huit index pour les acces utiles au projet.
+Ils peuvent accelerer les recherches et certaines jointures selon le plan
+choisi par Oracle ; une lecture complete peut rester pertinente pour une
+extraction de masse. La requete de denormalisation utilise huit tables
+relationnelles, dont `CATEGORIES` est jointe deux fois pour sa hierarchie.
 
 L'index composite `ix_orders_customer_date (customer_id, order_date DESC)` est
 volontairement l'exact miroir de la future table Cassandra
@@ -174,9 +174,9 @@ du sujet, detaille dans `docs/03-modele-cassandra.md`. Trois points a retenir :
    (`JSON_OBJECT`, `JSON_ARRAYAGG`). Python ne fait que lire des lignes et les
    ecrire sur disque — il ne reconstruit aucune structure. La logique reste ou
    sont les donnees ;
-2. **`RETURNING CLOB` est obligatoire** : sans lui, `JSON_OBJECT` renvoie du
-   `VARCHAR2(4000)` et tronque silencieusement les commandes a nombreuses
-   lignes. C'est le piege classique de SQL/JSON sous Oracle ;
+2. **`RETURNING CLOB`** permet les documents volumineux : le type de retour
+   par defaut `VARCHAR2(4000)` limite la taille du document. Le CLOB evite cette
+   limite pour les commandes comportant de nombreuses lignes ;
 3. **`FORMAT JSON`** signale que le tableau `items` est deja du JSON : sans ce
    mot cle, il serait insere comme une chaine echappee.
 

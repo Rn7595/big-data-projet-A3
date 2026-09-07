@@ -3,7 +3,7 @@ COMPOSE := docker compose
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install phase1 phase2 phase3 phase4 test tracer \
+.PHONY: help install phase1 phase2 phase3 phase4 test test-unit tracer \
         oracle-up oracle-down cassandra-up cassandra-down elastic-up elastic-down \
         down status clean-data reset
 
@@ -21,6 +21,7 @@ help:
 	@echo "  make elastic-down    eteint la phase 4"
 	@echo "  make down            eteint tout ce qui traine"
 	@echo "  make test            controle global : coherence des quatre phases"
+	@echo "  make test-unit       regressions du traceur et des indicateurs (Java 17, sans bases)"
 	@echo "  make tracer CMD=<id> controle complementaire : une commande, toutes les sources"
 	@echo "  make status          affiche les conteneurs en cours"
 	@echo "  make clean-data      supprime les artefacts de data/"
@@ -74,6 +75,9 @@ reset: down clean-data
 
 test:
 	python -m tests.test_coherence_pipeline
+
+test-unit:
+	python -m unittest discover -s tests -p 'test_unit_*.py' -v
 
 # Controle complementaire de `make test` : au lieu de comparer les volumetries
 # globales, suit une commande precise a travers chaque source disponible.

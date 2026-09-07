@@ -77,7 +77,7 @@ def main() -> None:
         # Q3 -----------------------------------------------------------------
         sample = session.execute(
             "SELECT category_id, year_month FROM sales_by_category_month LIMIT 1").one()
-        titre("Q3", "le chiffre d'affaires d'une categorie sur un mois",
+        titre("Q3", "le montant des articles d'une categorie sur un mois (tous statuts)",
               f"SELECT SUM(line_amount) FROM sales_by_category_month "
               f"WHERE category_id = {sample.category_id} AND year_month = '{sample.year_month}'")
         result = session.execute(
@@ -87,6 +87,8 @@ def main() -> None:
             (sample.category_id, sample.year_month)).one()
         print(f"      {result.lignes} lignes, {result.quantite} articles, "
               f"{result.chiffre_affaires} EUR")
+        print("    Montant apres remise, hors port et tous statuts confondus ;")
+        print("    Spark appliquera ensuite la regle de CA net selon le statut.")
         print("    La cle de partition composite (categorie, mois) est fournie en entier :")
         print("    l'agregation porte sur une partition bornee, pas sur le cluster.")
 

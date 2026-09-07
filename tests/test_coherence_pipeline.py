@@ -1,8 +1,9 @@
 """Controles de coherence entre les quatre phases du pipeline.
 
-Chaque phase ecrit un rapport dans data/reports/. Ce script les rapproche et
-verifie que la meme donnee se retrouve, en meme quantite, d'un bout a l'autre
-de la chaine.
+Chaque phase ecrit un rapport dans data/reports/. Ce script rapproche les
+comptages et montants de ces rapports, sans reinterroger les bases. Il ne
+verifie ni chaque champ ni la fraicheur des rapports. Des rapports anciens
+coherents ne prouvent pas l'etat actuel des sources.
 
 Ces controles portent sur les volumetries et les montants agreges de
 l'ensemble des quatre phases. Ils sont complementaires de
@@ -140,9 +141,9 @@ def test_clients_segmentes_indexes() -> tuple[str, str]:
 def test_chiffre_affaires_identique() -> tuple[str, str]:
     """Spark et Elasticsearch doivent trouver le meme chiffre d'affaires.
 
-    Le controle le plus fort du lot : deux moteurs differents, deux chemins de
-    calcul independants, un seul resultat attendu. Spark agrege des decimaux
-    depuis Parquet ; Elasticsearch agrege des scaled_float depuis son index.
+    Les rapports comparent deux agregations du meme champ net_amount : Spark
+    depuis le DataFrame des faits, Elasticsearch depuis son index. La regle
+    metier qui a produit net_amount n'est pas recalculee independamment ici.
     """
     spark = charger("phase3").get("chiffre_affaires")
     elastic = charger("phase4").get("chiffre_affaires")
@@ -203,7 +204,7 @@ def main() -> int:
     if echecs:
         print(f"{echecs} controle(s) en echec.")
         return 1
-    print(f"{len(CONTROLES)} controles passes : la donnee traverse le pipeline sans perte.")
+    print(f"{len(CONTROLES)} controles passes : rapports des quatre phases coherents.")
     print("Controle complementaire sur une commande precise : make tracer CMD=<order_id>")
     return 0
 

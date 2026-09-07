@@ -115,8 +115,8 @@ def main() -> None:
         for row in annees:
             LOGGER.info("    %s  %14s EUR", row["order_year"], f"{row['sum(net_amount)']:,.2f}")
             total_ca += float(row["sum(net_amount)"])
-        # Conserve pour le controle de coherence : Elasticsearch recalculera ce
-        # meme total en phase 4, par un chemin entierement different.
+        # Conserve pour le controle de coherence : Elasticsearch reagregera
+        # le meme champ net_amount apres son indexation en phase 4.
         report["chiffre_affaires"] = round(total_ca, 2)
         LOGGER.info("Chiffre d'affaires total : %s EUR", f"{total_ca:,.2f}")
 

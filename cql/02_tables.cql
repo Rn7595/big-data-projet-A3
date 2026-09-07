@@ -22,7 +22,7 @@
 -- Les quatre requetes metier retenues :
 --   Q1  l'historique des commandes d'un client, les plus recentes d'abord
 --   Q2  le detail d'une commande designee par son identifiant
---   Q3  le chiffre d'affaires d'une categorie sur un mois donne
+--   Q3  le montant des articles d'une categorie sur un mois donne (tous statuts)
 --   Q4  le catalogue d'une categorie, par ordre alphabetique
 -- ---------------------------------------------------------------------------
 
@@ -141,7 +141,9 @@ CREATE TABLE IF NOT EXISTS order_by_id (
   total_amount           decimal
 );
 
--- Q3 : "le chiffre d'affaires de la categorie X sur le mois M"
+-- Q3 : "le montant des articles de la categorie X sur le mois M"
+-- La somme de line_amount inclut tous les statuts, hors frais de port.
+-- Le CA net est calcule plus tard par Spark selon les statuts retenus.
 --
 -- CLE DE PARTITION COMPOSITE : (category_id, year_month).
 --   C'est le point le plus interessant du modele. Partitionner par la seule

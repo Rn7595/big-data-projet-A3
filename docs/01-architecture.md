@@ -15,9 +15,9 @@
   data/json/          tables denormalisees  data/parquet/       index + dashboard
 ```
 
-Chaque phase repose sur un conteneur unique, a l'exception de la phase 3 qui
-s'execute en local. Les conteneurs sont eteints entre les phases, sauf
-Cassandra qui reste actif pendant la phase 3.
+Les phases 1 et 2 utilisent chacune un conteneur ; la phase 4 en utilise deux,
+Elasticsearch et Kibana. La phase 3 execute Spark en local et conserve
+Cassandra actif le temps de sa lecture.
 
 ## Pourquoi l'execution peut etre sequentielle
 
@@ -61,9 +61,11 @@ Les `mem_limit` sont des plafonds imposes aux conteneurs ; la derniere colonne
 donne l'ordre de grandeur attendu, a confirmer par `docker stats` pendant le
 premier run.
 
-Si les quatre phases tournaient ensemble, le total declare atteindrait 11,5 Go,
-auxquels s'ajouteraient les JVM locales : la machine tiendrait mal. En
-sequentiel, on ne depasse jamais 5 Go.
+Les limites des quatre conteneurs totalisent 12 Go (4 + 3 + 2,5 + 2), auxquels
+s'ajouteraient Spark, Python et le systeme. L'execution sequentielle reduit la
+pression memoire. Les 4 a 5 Go annonces pour la phase 3 sont une estimation,
+pas un plafond global garanti : le heap Spark de 2 Go ne couvre pas toute la
+memoire du processus.
 
 ## Ce que les profils Compose apportent
 
@@ -77,16 +79,15 @@ docker compose --profile cassandra up -d    # phase 2
 ```
 
 Les profils separent les groupes de services et reduisent le risque d'un
-demarrage involontaire : aucune commande courte n'allume l'ensemble des
-conteneurs. Ils n'empechent pas pour autant d'activer plusieurs profils
-successivement sans arreter les precedents.
+demarrage involontaire. Ils n'interdisent pas d'activer plusieurs profils,
+ensemble ou successivement, sans arreter les precedents.
 
 La sequentialite complete repose donc sur trois elements complementaires :
 
 | Element | Ce qu'il garantit |
 |---|---|
-| Les profils Compose | aucun demarrage global involontaire |
-| Les gardes des scripts de phase | refus de demarrer si un service incompatible est encore actif |
+| Les profils Compose | selection explicite des groupes de services |
+| Les gardes des scripts de phase | phase 2 refuse Oracle actif ; phase 4 refuse Oracle ou Cassandra actifs |
 | Les commandes d'arret entre les etapes | l'extinction effective, rappelee en fin de chaque script |
 
 Les volumes sont nommes (`oracle_data`, `cassandra_data`, `es_data`,
@@ -104,10 +105,10 @@ make cassandra-down
 make phase4
 ```
 
-Cassandra reste allume entre les phases 2 et 3, seul endroit ou une phase lit
-une base et non un fichier. Les scripts refusent de demarrer si la phase
-precedente n'a pas produit son fichier, ou si un conteneur qui aurait du etre
-eteint tourne encore.
+Cassandra reste allume entre les phases 2 et 3 : Spark lit ses tables en direct.
+La phase 2 verifie la presence du JSON et l'arret d'Oracle ; la phase 3 attend
+Cassandra ; la phase 4 verifie la presence du Parquet et l'arret d'Oracle et de
+Cassandra. L'utilisateur lance les commandes d'arret indiquees entre les phases.
 
 Chaque script de phase attend l'etat `healthy` du conteneur (defini par les
 `healthcheck` du Compose) plutot qu'une temporisation fixe, et rappelle en fin

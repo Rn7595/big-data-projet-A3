@@ -50,7 +50,21 @@ Cassandra reste allume entre les phases 2 et 3 : c'est la seule phase qui lit
 une base plutot qu'un fichier. Spark s'executant en local, sans conteneur, le
 pic memoire reste maitrise.
 
-`make test` verifie la coherence des volumetries entre les quatre phases.
+`make test` compare les comptages et montants des rapports enregistres dans
+`data/reports/` par les quatre phases. Il ne reinterroge pas les bases et ne
+verifie pas chaque champ ; ses resultats portent sur l'execution ayant produit
+ces rapports. Des rapports anciens ne prouvent pas l'etat actuel des bases.
+
+`make test-unit` execute les tests de regression du traceur et des indicateurs,
+sur de petits jeux de donnees, sans Oracle, Cassandra ni Elasticsearch. Les
+dependances Python du projet et Java 17 sont necessaires.
+
+`make tracer CMD=46463` compare une commande dans les sources disponibles :
+nombre de lignes, montants des articles hors port et frais de port explicites.
+Une comparaison partielle est annoncee comme telle ; moins de deux sources
+comparables donnent un resultat non concluant (code 2), un ecart donne le code 1.
+L'identifiant 46463 est l'exemple de l'execution du 1er septembre 2026.
+
 `make help` liste toutes les cibles. Kibana est ensuite disponible sur
 <http://localhost:5601>.
 
@@ -105,7 +119,20 @@ Deux precisions sur les choix laisses libres par le sujet :
   l'etape 1, les transformations par PySpark a l'etape 3, et la relecture du
   Parquet par PyArrow, qui lit par lots sans materialiser toutes
   les lignes en memoire. Charger le tout dans un DataFrame pandas aurait ete un choix
-  contraire a l'esprit du sujet.
+  inutile pour cette etape de lecture par lots.
+
+## Livrables
+
+Le mail de compensation fixe le depot au **15 septembre 2026** : un rapport de
+**20 pages maximum** expliquant le projet et une archive du code source, puis
+une soutenance dans la semaine suivant le depot. L'enonce joint demande aussi
+une **video de demonstration de 10 minutes maximum**.
+
+Le dossier `docs/` fournit les explications techniques de base ; il ne remplace
+pas le rapport de synthese demande. L'archive doit contenir notamment les
+sources, les tests, la documentation et `.env.example`, en excluant `.env`,
+les donnees generees, les caches, les environnements Python, `.git` et les notes
+personnelles de `preparation/`.
 
 ## Documentation
 

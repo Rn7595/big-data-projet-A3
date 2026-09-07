@@ -14,9 +14,9 @@ from pyspark.sql import functions as F
 
 # Statuts qui constituent du chiffre d'affaires reel.
 #
-# Regle metier a assumer et a savoir defendre : une commande annulee ou
-# retournee n'a jamais produit de recette, et une commande en attente n'est pas
-# encore payee. Les compter gonflerait le chiffre d'affaires d'environ 17 %
+# Regle simplifiee du projet : les commandes annulees, retournees ou en
+# attente sont exclues du CA net des articles, qui ne comprend pas les frais
+# de port. Les compter gonflerait le chiffre d'affaires d'environ 17 %
 # dans ce jeu de donnees. Les lignes correspondantes ne sont pas supprimees
 # pour autant : elles restent dans la table de faits, marquees par une colonne
 # booleenne, afin de pouvoir analyser le taux d'annulation.
@@ -88,7 +88,13 @@ def build_fact_order_items(df: DataFrame) -> DataFrame:
 
 
 def aggregate_by_month(facts: DataFrame) -> DataFrame:
-    """Chiffre d'affaires, commandes et panier moyen par mois."""
+    """CA et activite par mois, tous statuts de commande confondus.
+
+    nb_lignes_sans_ca inclut PENDING, CANCELLED et RETURNED.
+    ca_moyen_par_commande divise le CA net par toutes les commandes du mois,
+    et non par les seules commandes facturees. La segmentation RFM utilise,
+    elle, un panier_moyen calcule uniquement sur les commandes avec CA.
+    """
     return (
         facts
         .groupBy("year_month", "order_year", "order_month")
@@ -97,10 +103,10 @@ def aggregate_by_month(facts: DataFrame) -> DataFrame:
             F.countDistinct("order_id").alias("nb_commandes"),
             F.sum("quantity").alias("nb_articles"),
             F.countDistinct("customer_id").alias("nb_clients"),
-            F.sum(F.when(~F.col("is_revenue"), 1).otherwise(0)).alias("nb_lignes_annulees"),
+            F.sum(F.when(~F.col("is_revenue"), 1).otherwise(0)).alias("nb_lignes_sans_ca"),
         )
         .withColumn(
-            "panier_moyen",
+            "ca_moyen_par_commande",
             (F.col("chiffre_affaires") / F.col("nb_commandes")).cast(MONEY),
         )
         .orderBy("year_month")

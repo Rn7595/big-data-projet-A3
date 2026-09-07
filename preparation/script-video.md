@@ -29,18 +29,11 @@ Attention aux unites : la phase 3 affiche les tailles en mebioctets
 
 ## Avant d'enregistrer
 
-**Ne jouez pas le pipeline en direct.** Quatre phases prennent 25 minutes ; la
-video en fait 10. Executez tout avant, puis commentez des resultats deja
-presents a l'ecran. Si vous voulez montrer une execution reelle, reduisez la
-volumetrie dans `.env` :
-
-```bash
-NB_ORDERS=5000
-NB_CUSTOMERS=800
-```
-
-Les temps sont alors divises par dix et une phase se deroule en direct pendant
-que vous parlez.
+**Executez le pipeline avant l'enregistrement.** Il prend plusieurs minutes,
+selon la machine et les caches. Conservez le jeu valide du 1er septembre pour
+presenter les chiffres ci-dessus ; une regeneration peut les modifier.
+La video montre le code, les resultats, Kibana et les controles. Visez 9 minutes
+pour garder une marge sous la limite de 10 minutes.
 
 **Ou presenter : dans VS Code, pas sur GitHub.**
 
@@ -95,19 +88,20 @@ head -1 data/json/orders.jsonl | python3 -m json.tool | head -30
 > choisi un theme e-commerce : clients, commandes, produits, categories.
 >
 > Contrainte que je me suis imposee : l'ensemble tourne dans un Codespace de
-> 16 Go, **une phase a la fois**. Aucune brique ne tourne en meme temps qu'une
-> autre. »
+> 16 Go. Les phases sont lancees dans l'ordre ; Cassandra reste active pendant
+> la lecture Spark, puis Elasticsearch et Kibana fonctionnent ensemble. »
 
 **La phrase qui montre que vous avez compris le probleme :**
 
-> « C'est possible parce que deux phases ne se parlent jamais directement : le
-> passage de temoin est un **fichier sur disque**. Oracle est eteint avant que
-> Cassandra ne demarre. »
+> « Oracle passe ses donnees a Cassandra par un fichier JSON. Spark lit ensuite
+> Cassandra en direct et produit le Parquet qui alimente Elasticsearch. Oracle
+> peut donc etre eteint avant le demarrage de Cassandra. »
 
 *Montrer `docker-compose.yml`, les `profiles:`.*
 
-> « La sequentialite n'est pas une regle que je dois me rappeler, elle est
-> portee par le fichier : `docker compose up` sans argument ne demarre rien. »
+> « Les profils selectionnent les services. Les scripts ajoutent des gardes,
+> et les commandes d'arret entre les phases assurent leur extinction. Les
+> profils seuls n'interdisent pas de tout demarrer. »
 
 ---
 
@@ -123,8 +117,9 @@ head -1 data/json/orders.jsonl | python3 -m json.tool | head -30
 **Le point a marteler — il prepare toute la suite :**
 
 > « Remarquez ce qui n'est **pas** dans la table `ORDERS` : le montant total.
-> Il se deduit des lignes de commande. Le stocker violerait la 3NF. Retenez ce
-> point, c'est exactement ce que la denormalisation Cassandra va materialiser. »
+> Il se deduit des lignes et des frais de port. Je le calcule pour eviter de
+> conserver un total qui pourrait ne plus correspondre aux lignes. Ce total
+> sera materialise lors de la denormalisation vers Cassandra. »
 
 *Ecran : sortie de la phase 1, section nettoyage.*
 
@@ -132,14 +127,14 @@ head -1 data/json/orders.jsonl | python3 -m json.tool | head -30
 > aveugles a ce qui est valide mais sale : casse incoherente, espaces
 > parasites. Mon generateur en injecte 1 %, le nettoyage en corrige 441.
 >
-> Et deux controles expriment des regles qu'**aucune contrainte declarative ne
-> peut porter** : une cle etrangere garantit que l'adresse de livraison existe,
-> pas qu'elle appartient au client de la commande. »
+> Deux controles verifient aussi des regles que les contraintes simples du
+> schema ne couvrent pas : l'adresse de livraison doit appartenir au client,
+> et la commande doit etre posterieure a son inscription. »
 
 *Ecran : `sql/10_extract_orders.sql`, puis un document JSON.*
 
 > « La denormalisation est faite par Oracle lui-meme, en SQL/JSON. Python ne
-> fait que lire des lignes et les ecrire. Resultat : six tables aplaties en un
+> fait que lire des lignes et les ecrire. Resultat : huit tables regroupees en un
 > document par commande, avec les lignes imbriquees. 59 723 documents extraits
 > en 5,3 secondes. »
 
@@ -170,13 +165,15 @@ head -1 data/json/orders.jsonl | python3 -m json.tool | head -30
 > client obligerait a balayer tout le cluster. On paie du stockage, qui est bon
 > marche, pour supprimer des lectures distribuees, qui sont cheres. »
 
-*Ecran : `python -m pipeline.phase2_cassandra.demo_queries`.*
+*Ecran : sortie deja enregistree de `python -m pipeline.phase2_cassandra.demo_queries`.
+Pour executer cette demonstration en direct, Cassandra doit etre active ; ne
+la redemarrez pas avec Elasticsearch et Kibana pour cette video.*
 
 > « Q1 : les commandes d'un client, deja triees du plus recent au plus ancien —
 > l'ordre est celui du disque, aucun tri n'est calcule.
 >
-> Q2 : la meme commande, atteinte par une autre cle. Regardez la somme des
-> lignes : elle correspond au total pre-calcule. Ce total n'existe pas dans
+> Q2 : la meme commande, atteinte par une autre cle. La somme des lignes,
+> augmentee des frais de port, correspond au total pre-calcule. Ce total n'existe pas dans
 > Oracle. Il a ete calcule **une fois**, a l'ecriture. C'est ca, le compromis
 > NoSQL. »
 
@@ -188,16 +185,15 @@ imprevues, unicite de la verite, agregats libres.
 ### 4:30 – 6:15 — Phase 3 : Spark et Parquet
 
 > « Cassandra repond vite aux quatre questions pour lesquelles je l'ai modelise.
-> Il ne sait pas repondre a "quel est le chiffre d'affaires par mois, tous
-> rayons confondus" : un `SUM` n'est possible que dans une partition.
->
-> **C'est exactement le trou que Spark comble.** »
+> Pour une analyse par mois sur tous les rayons, il faudrait lire de nombreuses
+> partitions. Spark prend en charge ces lectures et les agregations globales. »
 
 *Ecran : `pipeline/phase3_spark/transforms.py`.*
 
 > « Spark tourne en local, sans conteneur. Pour 149 300 lignes, le cout de
-> coordination d'un cluster depasserait le gain. Mais le code est identique :
-> passer sur un vrai cluster ne demanderait que de changer l'URL du maitre.
+> coordination d'un cluster ne serait pas utile ici. Les transformations
+> peuvent etre reutilisees sur un cluster, avec une configuration adaptee du
+> maitre, des ressources et de l'acces aux donnees.
 >
 > Une regle metier a defendre : les commandes annulees ou retournees ne sont pas
 > du chiffre d'affaires. Mais je ne les supprime pas — je les **qualifie**,
@@ -224,10 +220,9 @@ imprevues, unicite de la verite, agregats libres.
 > construit n'importe quel regroupement. Un index pre-agrege ne repondrait
 > qu'aux questions prevues d'avance.
 >
-> Les mappings sont **declares, jamais devines**. En mapping dynamique, "Ecouteurs
-> sans fil Nexora X14" serait analyse en plusieurs termes, et mon tableau des
-> meilleures ventes afficherait "ecouteurs", "nexora", "x14" comme trois produits
-> distincts. D'ou le type `keyword`. »
+> Les mappings definissent explicitement les types. Le champ texte sert a la
+> recherche, son sous-champ keyword regroupe les produits par leur nom complet.
+> Les montants utilisent scaled_float et les champs inattendus sont rejetes. »
 
 *Ecran : le dashboard Kibana. Laissez-le respirer.*
 
@@ -236,11 +231,14 @@ imprevues, unicite de la verite, agregats libres.
 > la segmentation RFM calculee par Spark.
 >
 > Le dashboard n'est pas dessine a la souris : il est **genere par code et
-> versionne** dans le depot. Un dashboard construit dans l'interface disparait
-> avec le conteneur. Celui-la se reconstruit par une commande. »
+> versionne** dans le depot. Il persiste dans Elasticsearch tant que le volume
+> est conserve et peut aussi etre reconstruit sur une installation neuve. »
 
-*Cliquez sur un segment du camembert pour filtrer : la reactivite est votre
-meilleur argument visuel.*
+*Un filtre sur un rayon concerne les panneaux de ventes. Le panneau RFM vient
+d'un autre index et ne recalcule pas la segmentation a chaque filtre. Pour la
+video, un defilement du dashboard suffit ; si vous testez un filtre, retirez-le
+ensuite. Le compteur de commandes facturees est une estimation et le graphique
+des statuts compte des lignes de commande.*
 
 ---
 
@@ -250,8 +248,8 @@ meilleur argument visuel.*
 
 **Le moment le plus fort de votre soutenance. Ne le sautez pas.**
 
-> « Comment est-ce que je sais que rien n'a ete perdu entre Oracle et Kibana ?
-> Pas parce que je l'ai regarde : parce qu'un controle automatique le verifie.
+> « Ces sept controles rapprochent les rapports enregistres pendant les quatre
+> phases. Ils verifient les comptages et les montants agreges de cette execution.
 >
 > 149 300 lignes de commande dans Oracle, dans Cassandra, dans Parquet, dans
 > Elasticsearch. Le meme nombre aux quatre etapes.
@@ -261,8 +259,9 @@ meilleur argument visuel.*
 > controle ne se contente pas de l'affirmer : il compare l'ecart au nombre de
 > paniers vides reellement mesure sur Oracle.
 >
-> Et le dernier controle est le plus fort : Spark et Elasticsearch calculent le
-> meme chiffre d'affaires, par deux chemins totalement independants. »
+> Un autre controle compare le CA agrege par Spark et par Elasticsearch a partir
+> du meme champ net_amount. Les rapports sont coherents ; ce n'est pas une
+> verification de chaque champ ni une interrogation en direct de toutes les bases. »
 
 ---
 
@@ -290,15 +289,15 @@ bonne soutenance d'une tres bonne.**
 | « Pourquoi cette cle de partition ? » | Forte cardinalite pour repartir sur l'anneau, taille bornee par le bucket mensuel, et elle correspond a la question posee. |
 | « Qu'avez-vous perdu en denormalisant ? » | L'integrite referentielle, les requetes imprevues, l'unicite de la verite, et les agregats transverses — c'est pour ces derniers que Spark existe dans la chaine. |
 | « Pourquoi Parquet plutot que CSV ? » | Colonnaire, compresse, type, filtrable par statistiques de fichier : facteur 15,6 mesure sur ce jeu. |
-| « Vos donnees sont-elles realistes ? » | Generees avec saisonnalite, loi de Pareto et profil horaire ; panier median de 58 euros, conforme au secteur. |
-| « Pourquoi pas tout en meme temps ? » | Contrainte de 16 Go assumee, et rendue structurelle par les profils Compose — le fichier interdit de tout allumer. |
+| « Vos donnees sont-elles realistes ? » | Donnees synthetiques avec saisonnalite, concentration des achats et profil horaire ; elles servent a demontrer le pipeline, pas a representer une entreprise reelle. |
+| « Pourquoi pas tout en meme temps ? » | Pour limiter la memoire ; profils, gardes et commandes d'arret organisent l'execution. Cassandra reste active pendant la lecture Spark. |
 
 ## Erreurs a eviter
 
 - **Lire l'ecran a voix haute.** Le jury lit aussi. Expliquez *pourquoi*, pas
   *quoi*.
-- **Passer trop vite sur Cassandra.** C'est le coeur du sujet et la partie la
-  plus notee. Deux minutes minimum.
+- **Passer trop vite sur Cassandra.** Expliquez les cles de partition et les
+  requetes auxquelles les tables repondent. Aucun bareme detaille n'est fourni.
 - **Montrer du code ligne a ligne.** Montrez un fichier, pointez trois lignes,
   passez.
 - **Terminer sur le dashboard.** Terminez sur `make test` : la preuve vaut mieux

@@ -36,15 +36,14 @@ Fichiers : `pipeline/phase4_elastic/mappings/*.json`.
 
 Principe retenu : **le mapping est declare, jamais devine.**
 
-En mapping dynamique, Elasticsearch aurait typé :
+Le mapping explicite fixe les types utiles aux recherches et aux agregations,
+notamment `scaled_float` pour les montants et `keyword` pour les regroupements.
+Le mapping dynamique standard peut deja creer un champ `text` avec un
+sous-champ `.keyword` : il ne decoupe donc pas automatiquement un produit en
+plusieurs categories dans Kibana. Ici, les types et le rejet des champs
+inattendus sont controles par le projet.
 
-- les identifiants numeriques en `long` — inutilement large ;
-- les libelles en `text` analysé, donc **inutilisables comme critere de
-  regroupement** : « Smartphone Nexora X14 » deviendrait trois termes separes,
-  et le graphique des meilleures ventes afficherait « smartphone », « nexora »,
-  « x14 » comme trois produits distincts.
-
-D'ou les choix :
+Choix retenus :
 
 | Type retenu | Champs | Raison |
 |---|---|---|
@@ -72,7 +71,8 @@ minimum.
 
 L'identifiant est derive des cles metier plutot que genere par Elasticsearch.
 Consequence : **reindexer met a jour les documents existants au lieu d'en creer
-des doublons**. L'operation est donc rejouable sans nettoyage prealable.
+des doublons**. Le script de phase 4 recree toutefois les index avant le chargement complet :
+un nouveau lancement remplace les resultats precedents.
 
 ## Les controles
 
@@ -84,17 +84,19 @@ Le script ne se contente pas d'indexer :
    invisible) ;
 2. il calcule le chiffre d'affaires total par une agregation Elasticsearch, a
    comparer avec celui produit par Spark en phase 3. **Les deux doivent
-   coincider** : c'est le controle de bout en bout de tout le pipeline, d'Oracle
-   jusqu'a Kibana.
+   coincider**. `make test` compare ces montants dans les rapports sauvegardes.
+   Ce controle rapproche deux agregations du meme champ `net_amount` ; il ne
+   recalcule pas la regle metier depuis Oracle et ne remplace pas les autres
+   controles de volumetrie.
 
 ## Le tableau de bord
 
 Fichier : `pipeline/phase4_elastic/dashboard.py`.
 
-**Le dashboard est genere par code, pas dessine a la souris.** Un tableau de
-bord construit dans l'interface vit dans la base interne de Kibana et disparait
-avec le conteneur. Ici il est decrit dans le depot, versionne, et reconstruit a
-l'identique par une commande — meme argument que pour le reste du pipeline.
+**Le dashboard est genere par code.** Les objets sauvegardes de Kibana sont
+stockes dans Elasticsearch et persistent tant que son volume est conserve.
+La definition versionnee permet aussi de les reconstruire sur une installation
+neuve ; arreter ou supprimer le seul conteneur Kibana ne les efface pas.
 
 Huit panneaux, qui repondent aux questions d'un responsable e-commerce :
 
@@ -106,8 +108,16 @@ Huit panneaux, qui repondent aux questions d'un responsable e-commerce :
 | Repartition par rayon | anneau | quelle part pour chaque univers ? |
 | Meilleures ventes | table | quels produits portent le CA ? |
 | CA par pays | barres | ou sont mes clients ? |
-| Statuts de commande | barres | quel taux d'annulation ? |
+| Statuts de commande | barres | combien de lignes pour chaque statut ? |
 | Segmentation RFM | barres | a qui ai-je affaire ? |
+
+Trois precisions sur la lecture des panneaux :
+
+- le CA net correspond aux articles apres remise, hors frais de port ;
+- le compteur de commandes facturees utilise `unique_count` : c'est une
+  estimation du nombre de commandes distinctes, pas un comptage SQL exact ;
+- le graphique des statuts compte des **lignes de commande**, pas des commandes
+  distinctes. Il ne donne donc pas directement un taux d'annulation par commande.
 
 Deux details de conception :
 
@@ -115,9 +125,10 @@ Deux details de conception :
   est un etat a l'instant du calcul, pas une serie temporelle. Lui en donner un
   soumettrait le panneau au selecteur de periode du tableau de bord et le
   viderait des que l'utilisateur restreint la fenetre ;
-- **`timeRestore` est actif** : la periode couvrant l'historique complet est
-  enregistree avec le tableau de bord, qui s'ouvre donc directement sur des
-  donnees, sans reglage manuel. Un dashboard qui s'ouvre vide parce que la
+- **`timeRestore` est actif** : la fenetre relative des 25 derniers mois est
+  enregistree avec le tableau de bord. Elle couvre les donnees generees au moment
+  de l'execution, mais se deplace avec le temps. Pour revoir une ancienne
+  execution plus tard, choisir une periode absolue couvrant ses dates. Un dashboard qui s'ouvre vide parce que la
   periode par defaut est « les 15 dernieres minutes » est l'accident classique
   d'une demonstration Kibana.
 
