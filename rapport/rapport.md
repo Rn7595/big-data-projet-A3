@@ -247,11 +247,10 @@ l'empêcher.
 
 Un index mérite un commentaire particulier. `ix_orders_customer_date
 (customer_id, order_date DESC)` est le miroir exact de la future table Cassandra
-`orders_by_customer` : même clé d'accès, même ordre de tri. La comparaison est
-instructive, car Cassandra écrira physiquement les lignes dans cet ordre, alors
-qu'Oracle doit encore remonter de l'index vers la table pour lire les colonnes
-qui ne s'y trouvent pas. Même besoin métier, deux mises en œuvre : l'une par une
-structure annexe, l'autre par l'organisation des données sur le disque.
+`orders_by_customer` : même clé d'accès, même ordre de tri. La différence est
+qu'Oracle passe par une structure annexe, l'index, tandis que Cassandra rangera
+directement les lignes dans cet ordre sur le disque. Même besoin métier, deux
+mises en œuvre.
 
 `ORDER_ITEMS(order_id)` n'est volontairement pas indexé séparément : la colonne
 est déjà le préfixe de la clé primaire composite.
@@ -358,6 +357,48 @@ sans être chargé en mémoire, il se découpe trivialement puisque l'unité est
 ligne, et une interruption ne corrompt que la dernière ligne au lieu d'invalider
 tout le document. C'est aussi le format que Spark lit nativement en parallèle.
 
+Voici la structure d'un document produit. Les identifiants et les libellés
+ci-dessous sont des valeurs d'illustration, pas une ligne réelle du fichier :
+
+```json
+{
+  "order_id": 20114, "order_ref": "CMD-020114",
+  "order_date": "2026-04-12T19:24:00", "order_year_month": "2026-04",
+  "order_status": "DELIVERED",
+  "payment_method": "CB", "payment_label": "Carte bancaire",
+  "shipping_amount": 4.90,
+  "customer": { "customer_id": 2087, "email": "...", "first_name": "...",
+                "last_name": "...", "loyalty_tier": "SILVER",
+                "signup_date": "2024-11-03" },
+  "shipping_address": { "address_id": 4915, "city": "Lyon",
+                        "postal_code": "69003", "country_code": "FR",
+                        "country_name": "France", "region": "Europe" },
+  "items": [
+    { "line_no": 1, "product_id": 517, "sku": "SKU-000517",
+      "product_name": "Casque bluetooth", "brand": "...",
+      "category_id": 202, "category_name": "Casques audio",
+      "parent_category_id": 2, "parent_category_name": "Image & Son",
+      "quantity": 1, "unit_price": 99.00, "discount_pct": 10,
+      "line_amount": 89.10 },
+    { "line_no": 2, "product_id": 133, "sku": "SKU-000133",
+      "product_name": "Cle USB", "brand": "...",
+      "category_id": 104, "category_name": "Stockage",
+      "parent_category_id": 1, "parent_category_name": "Informatique",
+      "quantity": 2, "unit_price": 24.50, "discount_pct": 0,
+      "line_amount": 49.00 }
+  ],
+  "items_count": 2, "total_quantity": 3, "total_amount": 143.00
+}
+```
+
+Le total se vérifie à la main : 89,10 + 49,00 pour les articles, plus 4,90 de
+frais de port, soit 143,00 €.
+
+Tout ce dont Cassandra aura besoin pour répondre à ses quatre requêtes est là,
+dans un seul document : le client, l'adresse, les lignes avec leur produit, leur
+marque et leur catégorie, et les totaux déjà calculés. Aucune jointure ne sera
+nécessaire à la lecture.
+
 ---
 
 # 4. Phase 2 — dénormalisation et modèle Cassandra
@@ -403,11 +444,10 @@ PRIMARY KEY ((customer_id), order_date, order_id)
 WITH CLUSTERING ORDER BY (order_date DESC, order_id DESC)
 ```
 
-`customer_id` en clé de partition pour trois raisons cumulées : sa cardinalité
-est forte (5 000 valeurs distinctes, donc une répartition uniforme sur l'anneau,
-sans point chaud) ; la taille de chaque partition est bornée en pratique, un très
-gros client dépassant rarement quelques centaines de commandes, loin des 100 Mo
-par partition au-delà desquels les performances se dégradent ; et surtout elle
+`customer_id` en clé de partition pour trois raisons cumulées : il prend 5 000
+valeurs distinctes, donc les données se répartissent uniformément au lieu de
+s'entasser au même endroit ; la taille de chaque partition reste petite, un très
+gros client dépassant rarement quelques centaines de commandes ; et surtout elle
 correspond à la question posée, qui connaît toujours le client dont elle veut
 l'historique.
 
@@ -483,9 +523,9 @@ paraît plus utile que de ne présenter que la solution retenue.
 
 | Choix envisagé | Pourquoi il est mauvais |
 |---|---|
-| Partitionner par `order_date` | toutes les commandes du jour tombent sur le même nœud, qui encaisse la totalité du trafic d'écriture. Point chaud caractérisé. |
-| Partitionner par `order_status` | six valeurs distinctes, donc six partitions énormes et un anneau totalement déséquilibré. |
-| Index secondaire sur `customer_id` | la requête devient un *scatter-gather* interrogeant tous les nœuds. Un index secondaire Cassandra n'a pas le comportement d'un index SQL. |
+| Partitionner par `order_date` | toutes les commandes d'une même journée se retrouvent au même endroit, qui encaisse seul les écritures du jour. |
+| Partitionner par `order_status` | six valeurs distinctes seulement, donc six partitions énormes et très déséquilibrées. |
+| Index secondaire sur `customer_id` | un index secondaire Cassandra n'a pas le comportement d'un index SQL : la lecture doit parcourir toute la table au lieu de viser une partition. |
 
 ## 4.5 Le type utilisateur `order_item`
 
@@ -514,12 +554,12 @@ Oracle tourne encore.
 
 Deux choix techniques méritent d'être justifiés.
 
-**Pas de `BatchStatement`.** C'est un réflexe venu du SQL, et un anti-pattern dès
-qu'un lot touche plusieurs partitions : le coordinateur doit attendre tous les
-nœuds concernés, et le lot devient plus lent que les écritures individuelles
-qu'il prétend remplacer. Un batch Cassandra garantit l'atomicité à l'intérieur
-d'une partition, ce n'est pas un outil de performance. J'utilise
-`execute_concurrent_with_args`, qui maintient soixante-quatre requêtes en vol.
+**Pas de `BatchStatement`.** C'est un réflexe venu du SQL, et une mauvaise idée
+ici : un batch Cassandra sert à garantir l'atomicité à l'intérieur d'une
+partition, ce n'est pas un outil de performance, et il devient plus lent que les
+écritures individuelles dès qu'il touche plusieurs partitions. J'utilise
+`execute_concurrent_with_args`, qui envoie soixante-quatre requêtes en
+parallèle.
 
 **Types monétaires en `decimal`, jamais en `double`.** Un `double` ne représente
 pas exactement 19,90, et l'erreur s'accumule sur des centaines de milliers de
@@ -581,13 +621,9 @@ transformation ne bouge. C'est tout l'intérêt de l'abstraction DataFrame.
 La lecture depuis Cassandra utilise le connecteur officiel, déclaré en
 coordonnées Maven (`com.datastax.spark:spark-cassandra-connector_2.12:3.5.1`)
 plutôt qu'en jar déposé dans le dépôt : la version reste visible dans le code et
-le livrable reste léger. Le suffixe `_2.12` est la version de Scala avec laquelle
-Spark 3.5 est compilé ; une version différente provoque des erreurs de méthode
-introuvable à l'exécution, difficiles à relier à leur cause. Le connecteur
-découpe la lecture suivant les **plages de jetons** de l'anneau, chaque tâche
-Spark lisant un segment de l'espace des clés de partition ; sur un vrai cluster,
-chaque exécuteur lirait en priorité les données du nœud dont il est le plus
-proche.
+le livrable reste léger. Le connecteur découpe la lecture en plusieurs tâches qui
+se partagent les partitions de la table, ce qui permet à Spark de lire en
+parallèle plutôt que ligne à ligne.
 
 ## 5.3 Les transformations et la règle métier
 
@@ -676,7 +712,7 @@ destiné à être relu souvent. **Typé** : le schéma est embarqué dans le fic
 sans réinterprétation d'une date ou d'un montant à chaque lecture, contrairement
 au CSV, et les montants sont en `decimal(14,2)`. **Filtrable** : chaque fichier
 porte les valeurs minimale et maximale de ses colonnes, ce qui permet d'écarter
-un fichier entier sans l'ouvrir — le *predicate pushdown*.
+un fichier entier sans même l'ouvrir.
 
 Le partitionnement suit la même logique que le bucketing temporel de Cassandra,
 appliquée cette fois au système de fichiers :
@@ -748,9 +784,9 @@ Deux réglages du mapping méritent un mot. **`dynamic: strict`** fait échouer
 l'indexation d'un champ non déclaré au lieu de l'accepter silencieusement : une
 colonne ajoutée en amont sans mise à jour du mapping se voit immédiatement,
 plutôt que d'apparaître trois semaines plus tard sous un type aberrant.
-**`number_of_replicas: 0`** parce que sur un cluster mono-nœud une réplique ne
-peut être allouée nulle part et le cluster resterait indéfiniment en état
-`yellow` ; en production, ce serait au minimum 1.
+**`number_of_replicas: 0`** parce que sur une installation à un seul nœud une
+réplique ne peut être placée nulle part, et l'index resterait indéfiniment en
+état `yellow`.
 
 ## 6.4 Des identifiants dérivés des clés métier
 
@@ -918,24 +954,21 @@ contournement, documenté dans le README, consiste à épingler setuptools puis 
 désactiver l'isolation de build.
 
 **La version de Java.** Spark 3.5 est officiellement supporté sur Java 8, 11 et
-17 ; j'ai vérifié que 21 fonctionne également. Au-delà, non : les JVM récentes
-verrouillent l'accès réflexif à leurs internes, dont Spark dépend pour sa
-sérialisation, et l'échec se manifeste par des `InaccessibleObjectException`
-illisibles, très loin de la cause réelle. Le Codespace fournissant Java 25 par
-défaut, le script de phase 3 détecte la version courante, cherche un JDK
-compatible et force `JAVA_HOME` si nécessaire ; s'il n'en trouve aucun, il
-s'arrête en affichant la commande d'installation plutôt que de laisser Spark
-échouer dans le vide.
+17, et j'ai vérifié que 21 fonctionne également. Avec Java 25, que le Codespace
+fournit par défaut, Spark échoue sur des erreurs internes à la JVM dont le
+message ne renvoie pas à la cause. Le script de phase 3 détecte donc la version
+courante, cherche un JDK compatible et force `JAVA_HOME` ; s'il n'en trouve
+aucun, il s'arrête en affichant la commande d'installation plutôt que de laisser
+Spark échouer dans le vide.
 
 **Les 143 fichiers de 46 Ko.** L'écriture partitionnée de Spark produit un fichier
-par partition d'exécution **et** par répertoire. La lecture Cassandra créant une
-partition par plage de jetons, j'obtenais 143 fichiers pour 24 répertoires. Une
-redistribution sur les colonnes de partitionnement, juste avant l'écriture, ramène
-le résultat à un fichier par répertoire. Le gain ne se limite pas au nombre de
-fichiers : la table de faits est passée de 6,6 Mo à 4,9 Mo, soit **25 % de moins
-pour exactement les mêmes données**, parce que les encodages de Parquet opèrent
-par bloc de colonne. Beaucoup de petits fichiers, c'est autant d'en-têtes
-dupliqués et de dictionnaires trop courts pour amortir leur propre coût.
+par partition d'exécution **et** par répertoire. Comme la lecture Cassandra est
+elle-même découpée en plusieurs morceaux, j'obtenais 143 fichiers pour 24
+répertoires. Une redistribution sur les colonnes de partitionnement, juste avant
+l'écriture, ramène le résultat à un fichier par répertoire. Le gain ne se limite
+pas au nombre de fichiers : la table de faits est passée de 6,6 Mo à 4,9 Mo, soit
+**25 % de moins pour exactement les mêmes données**, la compression de Parquet
+étant d'autant plus efficace que les fichiers sont gros.
 
 **Un client compté deux fois dans la segmentation RFM.** C'est le test qui l'a
 trouvé, pas la lecture du code. Le regroupement incluait initialement le pays et
@@ -971,20 +1004,12 @@ Plusieurs choix ont été faits pour tenir dans le cadre de l'exercice, et il me
 semble plus utile de les nommer que de les laisser passer pour des propriétés du
 système.
 
-**Un seul nœud partout.** Cassandra tourne en `SimpleStrategy` avec un facteur de
-réplication de 1, et Elasticsearch sans réplique. Ce sont des configurations de
-démonstration : sur un seul nœud il n'y a rien à répliquer, et toute autre valeur
-produirait un keyspace incapable de satisfaire ses propres exigences de
-cohérence. En production, on écrirait `NetworkTopologyStrategy` avec RF = 3 par
-centre de données, et des lectures comme des écritures en `LOCAL_QUORUM` : avec
-RF = 3, QUORUM vaut 2, et la règle **R + W > RF** (2 + 2 > 3) garantit qu'une
-lecture voit toujours la dernière écriture tout en tolérant la perte d'un nœud.
-Le snitch `GossipingPropertyFileSnitch`, déjà configuré, rendrait ce passage
-possible sans reconfiguration.
-
-**Aucun parallélisme réel n'est démontré.** Spark tourne en local. Le code serait
-identique sur un cluster, mais je n'ai pas mesuré son comportement à l'échelle et
-je me garde d'affirmer des performances que je n'ai pas observées.
+**Tout tourne sur une seule machine.** Cassandra est configuré avec un facteur
+de réplication de 1 et Elasticsearch sans réplique : sur un nœud unique, il n'y a
+rien à répliquer. Spark s'exécute en local. Le déploiement distribué n'a pas été
+testé, et je me garde donc d'affirmer des performances à l'échelle que je n'ai
+pas observées. Les valeurs de réplication seraient à revoir sur une installation
+réelle, mais c'est un travail que ce projet n'a pas fait.
 
 **Le pipeline est rejoué en entier, jamais en incrémental.** Un vrai système
 chargerait les nouvelles commandes en s'appuyant sur un horodatage ou un journal
