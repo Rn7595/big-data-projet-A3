@@ -37,12 +37,12 @@ données et les extraire vers **Cassandra** en passant par un fichier JSON ;
 d'analyse en Python ; enfin **indexer** dans Elasticsearch et exposer le résultat
 dans **Kibana**. Le thème métier est libre.
 
-L'intérêt de cet enchaînement n'est pas d'empiler quatre technologies, mais de
-faire traverser aux mêmes données quatre modèles de stockage aux objectifs
-contradictoires : Oracle optimise la cohérence en écriture, Cassandra la lecture
-ciblée à grande échelle, Parquet l'analyse transverse, Elasticsearch
-l'exploration libre. Passer de l'un à l'autre suppose à chaque fois d'abandonner
-quelque chose, et c'est ce que ce rapport s'attache à expliciter.
+L'enchaînement ne consiste pas seulement à empiler quatre technologies. Les
+mêmes données traversent quatre modèles de stockage qui n'ont pas le même but :
+Oracle sert la cohérence en écriture, Cassandra la lecture ciblée, Parquet
+l'analyse sur l'ensemble des données, Elasticsearch la recherche libre. À chaque
+passage on gagne quelque chose et on en perd une autre, et c'est ce que
+j'explique dans ce rapport.
 
 ## 1.2 Le thème retenu
 
@@ -216,11 +216,11 @@ même raisonnement vaut pour `PAYMENT_METHODS`.
 **Le montant total d'une commande n'est pas stocké.** Il se déduit des lignes.
 Le stocker introduirait une redondance calculable et donc un risque
 d'incohérence : il suffirait qu'une ligne soit corrigée sans recalcul du total
-pour que la base se contredise elle-même. Ce total sera calculé **une seule
-fois**, au moment de la dénormalisation vers Cassandra. C'est précisément là que
-se situe la différence de philosophie entre les deux modèles : le relationnel
-refuse de stocker ce qu'il peut recalculer, le NoSQL préfère payer une fois à
-l'écriture ce qu'il ne veut plus payer à chaque lecture.
+pour que la base se contredise elle-même. Ce total est calculé **une seule
+fois**, au moment de la dénormalisation vers Cassandra. C'est là que les deux
+modèles diffèrent : en relationnel on ne stocke pas ce qu'on peut recalculer,
+alors qu'en NoSQL on calcule une fois à l'écriture pour ne plus avoir à le faire
+à chaque lecture.
 
 **`unit_price` apparaît dans deux tables, et ce n'est pas une redondance.**
 `PRODUCTS.unit_price` est le prix courant du catalogue ;
@@ -325,9 +325,9 @@ Deux contrôles sont purement informatifs : `commandes_sans_ligne` et
 je reviens en section 7 : c'est lui qui explique l'écart entre 60 000 commandes
 et le nombre de documents extraits.
 
-Le nettoyage est placé **avant** l'extraction, délibérément : une donnée sale qui
-franchit la frontière JSON est recopiée dans Cassandra, puis dans Parquet, puis
-dans Elasticsearch, où plus rien ne permet de la rattacher à son origine.
+Le nettoyage est fait **avant** l'extraction, volontairement. Une donnée sale qui
+part dans le JSON se retrouve ensuite dans Cassandra, puis dans Parquet, puis
+dans Elasticsearch, et il devient très difficile de remonter à sa source.
 
 ## 3.7 La requête de dénormalisation
 
@@ -468,9 +468,10 @@ table par requête » appliqué jusqu'au bout, et sans doute ce qui surprend le 
 quand on vient du relationnel. Interroger `orders_by_customer` n'est pas une
 option, puisqu'une lecture exige la clé de partition : chercher une commande par
 son seul identifiant dans une table partitionnée par client obligerait à balayer
-toutes les partitions. Le coût de cette seconde table est un doublement du volume
-et deux écritures au lieu d'une. C'est le compromis explicite du modèle : le
-stockage est bon marché, la lecture distribuée ne l'est pas.
+toutes les partitions. Cette seconde table coûte un doublement du volume
+stocké et une écriture supplémentaire à chaque commande. C'est le compromis que
+le modèle assume : on accepte de stocker deux fois pour ne jamais avoir à
+chercher partout.
 
 **Q3 — le montant des articles d'une catégorie sur un mois.**
 
@@ -609,14 +610,12 @@ raison d'être de la chaîne :
 
 ## 5.2 Spark en local, sans conteneur
 
-`master("local[*]")` : le pilote et les exécuteurs vivent dans un seul processus
-JVM qui utilise tous les cœurs disponibles. Pour ce volume de données, l'exécution
-locale évite un coût de coordination réseau qui dépasserait le gain de
-parallélisme, et elle sert directement la contrainte mémoire puisqu'il n'y a
-aucun conteneur Spark à allumer en plus de Cassandra. Le point à retenir est que
-**le code reste identique à celui d'un cluster** : passer sur un cluster réel ne
-demanderait que de changer l'URL du maître, sans qu'aucune ligne de
-transformation ne bouge. C'est tout l'intérêt de l'abstraction DataFrame.
+`master("local[*]")` : Spark tourne dans un seul processus Java qui utilise tous
+les cœurs de la machine. Pour un volume de cette taille, faire tourner un cluster
+coûterait plus en coordination que ce qu'il ferait gagner. Cela sert aussi la
+contrainte mémoire, puisqu'il n'y a aucun conteneur Spark à allumer en plus de
+Cassandra. À noter : **le code serait le même sur un cluster**, il faudrait
+seulement changer l'URL du maître, sans modifier une ligne de transformation.
 
 La lecture depuis Cassandra utilise le connecteur officiel, déclaré en
 coordonnées Maven (`com.datastax.spark:spark-cassandra-connector_2.12:3.5.1`)
@@ -644,10 +643,9 @@ chiffre d'affaires d'environ 17 % sur ce jeu de données.
 
 Les lignes correspondantes ne sont pas supprimées pour autant : elles restent
 dans la table de faits, marquées par une colonne booléenne `is_revenue`, avec un
-`net_amount` à zéro. On peut ainsi analyser le taux d'annulation sans rien
-recharger. Le principe que j'ai suivi est de **qualifier la donnée plutôt que de
-la filtrer** : une donnée supprimée à l'étape trois n'est plus récupérable à
-l'étape quatre.
+`net_amount` à zéro. On peut donc analyser le taux d'annulation sans rien
+recharger. J'ai préféré **marquer les lignes plutôt que les supprimer**, parce
+qu'une donnée supprimée en phase 3 n'existe plus en phase 4.
 
 Les colonnes calendaires (`order_year`, `order_month`, `order_dow`,
 `order_hour`) sont dérivées de l'horodatage à ce moment-là : les stocker dans
@@ -842,10 +840,9 @@ Deux détails de conception, enfin. La vue de données des clients n'a
 volontairement **pas** de champ temporel : la segmentation est un état à
 l'instant du calcul, pas une série temporelle, et lui en donner un soumettrait le
 panneau au sélecteur de période et le viderait dès que l'utilisateur restreint la
-fenêtre. Et `timeRestore` est actif, de sorte que la fenêtre relative des
-vingt-cinq derniers mois est enregistrée avec le tableau de bord : un tableau de
-bord qui s'ouvre vide parce que la période par défaut est « les quinze dernières
-minutes » est l'accident classique d'une démonstration Kibana.
+fenêtre. Et `timeRestore` est actif, ce qui enregistre la fenêtre des vingt-cinq derniers
+mois avec le tableau de bord. Sans cela, Kibana l'ouvre sur « les quinze
+dernières minutes » et tous les panneaux apparaissent vides.
 
 ---
 
@@ -974,10 +971,10 @@ pas au nombre de fichiers : la table de faits est passée de 6,6 Mo à 4,9 Mo, s
 trouvé, pas la lecture du code. Le regroupement incluait initialement le pays et
 le niveau de fidélité en plus de l'identifiant client ; il suffisait qu'un client
 ait commandé depuis deux pays pour apparaître en deux lignes, chacune segmentée
-sur une moitié de ses achats. Le total du chiffre d'affaires restait juste, ce qui
-rendait l'erreur invisible aux contrôles de volumétrie globaux. C'est l'argument
-le plus concret que je puisse donner en faveur de fonctions de transformation
-testables une par une.
+sur une moitié de ses achats. Le total du chiffre d'affaires restait juste, si bien
+que les contrôles de volumétrie ne voyaient rien. C'est pour ce genre d'erreur
+que les transformations sont écrites comme des fonctions testables une par
+une.
 
 **L'import du tableau de bord Kibana.** L'API d'import groupé renvoyait une
 erreur 500 sans détail exploitable. J'ai remplacé l'appel groupé par une création
@@ -1043,17 +1040,15 @@ commande se retrouvent identiques aux quatre étapes, l'écart entre commandes
 générées et documents extraits est intégralement expliqué, et le chiffre
 d'affaires calculé par Spark est retrouvé au centime par Elasticsearch.
 
-Ce que je retiens surtout, c'est que la contrainte de mémoire, subie au départ, a
-été le meilleur outil de conception du projet. Elle interdisait d'avoir deux
-bases actives en même temps, ce qui m'a forcé à définir précisément ce qui passe
-d'une phase à l'autre : le fichier JSON a cessé d'être une formalité imposée par
-l'énoncé pour devenir un contrat d'interface entre deux systèmes qui ne se
-parlent jamais.
+Ce que je retiens surtout, c'est que la contrainte des 16 Go m'a aidé à concevoir
+le projet. Comme je ne pouvais pas avoir deux bases allumées en même temps, j'ai
+dû définir précisément ce qui passe d'une phase à l'autre. Le fichier JSON n'est
+donc pas une formalité imposée par l'énoncé, c'est ce qui permet à Oracle et
+Cassandra de ne jamais se parler directement.
 
-Le second enseignement est qu'aucun des quatre modèles n'est meilleur que les
-autres. Chacun est un compromis explicite, et la valeur du travail réside moins
-dans le fait de les faire fonctionner que dans la capacité à dire ce que chaque
-passage fait gagner et ce qu'il fait perdre.
+La seconde chose que je retiens, c'est qu'aucun des quatre modèles n'est meilleur
+que les autres. Chacun est adapté à un usage, et le vrai travail a été de
+comprendre ce que chaque passage fait gagner et ce qu'il fait perdre.
 
 ---
 

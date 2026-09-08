@@ -15,3 +15,4 @@ La documentation technique du projet, elle, se trouve dans `docs/`.
 | `script-video.md` | deroule minute par minute et questions probables |
 | `demonstrations-live.md` | commandes de demonstration, phase par phase |
 | `deroule-enregistrement.md` | sequence d'enregistrement et creation du zip |
+| `questions-reponses.md` | 40 questions probables et leur reponse, pour l'oral |
