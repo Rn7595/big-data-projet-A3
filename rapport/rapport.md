@@ -79,16 +79,16 @@ qu'un détour décoratif.
 ## 2.1 La chaîne
 
 ```
-   PHASE 1              PHASE 2              PHASE 3              PHASE 4
- ┌──────────┐        ┌───────────┐        ┌──────────┐       ┌───────────────┐
- │  Oracle  │        │ Cassandra │        │  Spark   │       │ Elasticsearch │
- │   23ai   │        │    5.0    │        │  local   │       │      +        │
- │(3NF, SQL)│        │ (NoSQL)   │        │ (PySpark)│       │    Kibana     │
- └────┬─────┘        └─────┬─────┘        └────┬─────┘       └───────┬───────┘
-      │                    │                   │                     │
-      │ JSON Lines         │ lecture CQL       │ Parquet             │ bulk API
-      ▼                    ▼                   ▼                     ▼
-  data/json/          tables dénormalisées  data/parquet/       index + dashboard
+  PHASE 1             PHASE 2             PHASE 3             PHASE 4
++-----------+       +-----------+       +-----------+       +---------------+
+|  Oracle   |       | Cassandra |       |   Spark   |       | Elasticsearch |
+|   23ai    |       |    5.0    |       |   local   |       |       +       |
+| 3NF, SQL  |       |  (NoSQL)  |       | (PySpark) |       |    Kibana     |
++-----------+       +-----------+       +-----------+       +---------------+
+      |                   |                   |                     |
+  JSON Lines         lecture CQL           Parquet              bulk API
+      v                   v                   v                     v
+  data/json/        tables denorm.      data/parquet/      index + dashboard
 ```
 
 ## 2.2 Comment on passe d'une phase à la suivante
@@ -168,24 +168,33 @@ Huit tables, dix clés étrangères. Le `#` marque une clé étrangère.
 
 ```
 COUNTRIES(country_code, country_name, region)
-    ▲
-ADDRESSES(address_id, #customer_id, address_type, street, city, postal_code, #country_code)
-    ▲                     ▲
-    │                 CUSTOMERS(customer_id, email, first_name, last_name,
-    │                           birth_date, signup_date, loyalty_tier)
-    │                     ▲
+    ^
+    |
+ADDRESSES(address_id, #customer_id, address_type, street, city,
+          postal_code, #country_code)
+    ^                  ^
+    |                  |
+    |           CUSTOMERS(customer_id, email, first_name, last_name,
+    |                     birth_date, signup_date, loyalty_tier)
+    |                  ^
+    |                  |
 ORDERS(order_id, order_ref, #customer_id, order_date, order_status,
-       #payment_method_id, #shipping_address_id, #billing_address_id, shipping_amount)
-    ▲                          ▲
-    │                  PAYMENT_METHODS(payment_method_id, method_code, method_label)
-    │
-ORDER_ITEMS(#order_id, line_no, #product_id, quantity, unit_price, discount_pct)
-                            ▲
-                     PRODUCTS(product_id, sku, product_name, brand,
-                              #category_id, unit_price, is_active, created_at)
-                            ▲
-                     CATEGORIES(category_id, category_code, category_name,
-                                #parent_category_id)   ← FK réflexive
+       #payment_method_id, #shipping_address_id, #billing_address_id,
+       shipping_amount)
+    ^                  ^
+    |                  |
+    |           PAYMENT_METHODS(payment_method_id, method_code, method_label)
+    |
+ORDER_ITEMS(#order_id, line_no, #product_id, quantity, unit_price,
+            discount_pct)
+                       ^
+                       |
+                PRODUCTS(product_id, sku, product_name, brand,
+                         #category_id, unit_price, is_active, created_at)
+                       ^
+                       |
+                CATEGORIES(category_id, category_code, category_name,
+                           #parent_category_id)   <- cle etrangere reflexive
 ```
 
 Le fichier de référence est `sql/01_schema.sql`.
@@ -540,11 +549,10 @@ imbriquée dans la ligne de commande. Le nom du produit, sa marque et sa catégo
 sont recopiés à l'intérieur : en SQL, il aurait fallu deux jointures
 supplémentaires pour les obtenir.
 
-Le mot-clé `frozen` demande à Cassandra de sérialiser la collection comme une
-valeur unique et immuable. La conséquence est à assumer : modifier une seule
-ligne de commande impose de réécrire tout le tableau. C'est acceptable ici parce
-qu'**une commande passée ne change plus**. Ce serait un mauvais choix pour une
-donnée mise à jour élément par élément.
+Le mot-clé `frozen` veut dire que Cassandra stocke toute la liste comme une seule
+valeur. Pour modifier une seule ligne de commande, il faut donc réécrire la liste
+entière. C'est acceptable ici parce qu'**une commande passée ne change plus** ;
+ce serait un mauvais choix pour une donnée mise à jour souvent.
 
 ## 4.6 Le chargement
 
@@ -730,10 +738,14 @@ Les sorties de la phase :
 | Fichier Parquet | Grain | Usage |
 |---|---|---|
 | `fact_order_items` | la ligne de commande | table de faits, indexée en phase 4 |
-| `agg_sales_by_month` | le mois | courbe temporelle du tableau de bord |
-| `agg_sales_by_category` | catégorie × mois | répartition par rayon |
-| `agg_top_products` | le produit | classement par rayon |
+| `agg_sales_by_month` | le mois | référence pour vérifier les totaux mensuels |
+| `agg_sales_by_category` | catégorie × mois | référence pour la répartition par rayon |
+| `agg_top_products` | le produit | référence pour le classement des ventes |
 | `dim_customers_rfm` | le client | segmentation, indexée en phase 4 |
+
+Seuls deux de ces cinq fichiers sont indexés en phase 4. Les trois agrégats
+restent en Parquet et servent de point de comparaison pour vérifier les chiffres
+affichés par Kibana ; la raison de ce choix est expliquée en section 6.2.
 
 ---
 
