@@ -51,12 +51,10 @@ un catalogue de produits organisé en rayons, et des commandes composées de
 plusieurs lignes.
 
 Ce thème contient les trois formes de relation qui rendent l'exercice
-intéressant : une relation 1-N classique entre un client et ses commandes ; une
-relation 1-N à cardinalité variable entre une commande et ses lignes, exactement
-ce qu'une base orientée documents sait absorber et qu'une base relationnelle doit
-éclater ; et une hiérarchie réflexive dans les catégories, qui n'a pas
-d'équivalent direct en CQL. Un thème plus plat, des relevés de capteurs par
-exemple, aurait rendu l'étape de dénormalisation presque triviale.
+intéressant : une relation 1-N entre un client et ses commandes ; une relation
+1-N à cardinalité variable entre une commande et ses lignes, exactement ce qu'une
+base orientée documents sait absorber et qu'une base relationnelle doit éclater ;
+et une hiérarchie réflexive dans les catégories, sans équivalent direct en CQL.
 
 ## 1.3 La contrainte d'exécution
 
@@ -113,27 +111,14 @@ actif pendant le traitement suivant. Entre **Spark et Elasticsearch**, on revien
 | 3 | Cassandra (lecture) | Cassandra | `data/parquet/` |
 | 4 | Elasticsearch + Kibana | `data/parquet/` | 2 index + tableau de bord |
 
-## 2.3 Ce qui garantit réellement la séquentialité
+Trois choses assurent que les phases ne se chevauchent pas. Les services du
+`docker-compose.yml` portent tous un `profiles:`, donc `docker compose up` sans
+argument ne démarre rien : il faut nommer la phase. Les scripts refusent de
+démarrer si une phase précédente tourne encore. Et chaque script rappelle en fin
+d'exécution la commande d'extinction à lancer. Les volumes étant nommés,
+éteindre une phase n'efface pas ses données.
 
-Les services du `docker-compose.yml` portent tous un `profiles:`, si bien qu'un
-`docker compose up` sans argument ne démarre rien : il faut nommer la phase. Je
-précise que les profils **ne suffisent pas** à garantir la séquentialité : rien
-n'interdit d'activer deux profils l'un après l'autre sans arrêter le premier. Ils
-réduisent le risque d'un démarrage involontaire, sans plus.
-
-La garantie effective repose sur trois éléments qui se complètent :
-
-| Élément | Ce qu'il apporte |
-|---|---|
-| Profils Compose | sélection explicite des groupes de services |
-| Gardes des scripts de phase | la phase 2 refuse de démarrer si Oracle tourne encore ; la phase 4 refuse si Oracle ou Cassandra tournent |
-| Commandes d'arrêt entre les étapes | l'extinction effective, rappelée en fin de chaque script |
-
-Les volumes sont nommés (`oracle_data`, `cassandra_data`, `es_data`,
-`kibana_data`) : éteindre une phase n'efface pas ses données, et l'on peut
-revenir sur une phase antérieure sans tout rejouer.
-
-## 2.4 Budget mémoire
+## 2.3 Budget mémoire
 
 Les plafonds sont déclarés dans le `docker-compose.yml`. La dernière colonne est
 un ordre de grandeur attendu, pas une mesure certifiée : je l'ai estimée à partir
@@ -151,7 +136,7 @@ Cumulées, ces limites atteindraient 12 Go, auxquels s'ajouteraient Spark, Pytho
 et le système : l'exécution séquentielle est donc ce qui rend le projet
 réalisable dans l'enveloppe disponible, et non un raffinement de confort.
 
-## 2.5 Organisation du dépôt
+## 2.4 Organisation du dépôt
 
 Le dépôt est organisé par phase (`sql/`, `cql/`, `pipeline/`, `scripts/`,
 `kibana/`, `docs/`, `tests/`), ce qui évite les dépendances croisées : le code de
@@ -248,21 +233,12 @@ attributs qui lui sont propres ? ».
 
 ## 3.4 Les index
 
-Huit index sont déclarés dans `sql/02_indexes.sql`, pour les accès effectivement
-utilisés par le projet. Ils peuvent accélérer les recherches et certaines
-jointures selon le plan retenu par l'optimiseur ; pour une extraction de masse,
-un balayage complet reste souvent le meilleur choix, et je n'ai pas cherché à
-l'empêcher.
-
-Un index mérite un commentaire particulier. `ix_orders_customer_date
+Huit index sont déclarés dans `sql/02_indexes.sql`, pour les accès utilisés par
+le projet. L'un d'eux mérite d'être signalé : `ix_orders_customer_date
 (customer_id, order_date DESC)` est le miroir exact de la future table Cassandra
-`orders_by_customer` : même clé d'accès, même ordre de tri. La différence est
-qu'Oracle passe par une structure annexe, l'index, tandis que Cassandra rangera
-directement les lignes dans cet ordre sur le disque. Même besoin métier, deux
-mises en œuvre.
-
-`ORDER_ITEMS(order_id)` n'est volontairement pas indexé séparément : la colonne
-est déjà le préfixe de la clé primaire composite.
+`orders_by_customer`, même clé d'accès et même ordre de tri. La différence est
+qu'Oracle passe par une structure annexe alors que Cassandra rangera directement
+les lignes dans cet ordre sur le disque.
 
 ## 3.5 Le jeu de données : pourquoi le générer
 
@@ -284,22 +260,11 @@ génération permet en outre d'injecter délibérément les défauts que l'étap
 nettoyage doit corriger, et la graine aléatoire (`SEED=42`) rend le jeu
 reproductible, ce qui autorise à comparer les comptages d'une phase à l'autre.
 
-Le réalisme du générateur n'est pas cosmétique. Trois propriétés sont injectées
-volontairement, chacune pour une raison précise en aval : une **saisonnalité
-mensuelle**, avec un pic de novembre-décembre au double du niveau moyen et un
-creux en août, sans laquelle la courbe temporelle du tableau de bord serait une
-ligne plate ; une **loi de Pareto** sur les produits comme sur les clients,
-environ 20 % des produits concentrant 70 % des lignes, déséquilibre qui donne son
-sens à la segmentation RFM de la phase 3 et rend visible en phase 2 le fait que
-les partitions Cassandra ne sont pas de tailles égales ; et un **profil horaire**
-avec un pic en soirée, qui rend l'histogramme par heure exploitable.
-
-Les fourchettes de prix sont définies par **type de produit** et non par
-catégorie. Ce détail vient d'une correction : avec une fourchette unique par
-catégorie, « Périphériques » allant de 19 à 549 €, une webcam pouvait ressortir à
-500 € et un écran 27 pouces à 20 €, ce qui rendait le tableau des meilleures
-ventes absurde à la lecture. Chaque catégorie feuille porte donc trois à quatre
-types de produits, chacun avec sa propre fourchette.
+Le générateur injecte volontairement trois propriétés, chacune pour une raison en
+aval : une **saisonnalité mensuelle**, avec un pic en novembre-décembre, sans
+laquelle la courbe du tableau de bord serait plate ; une **loi de Pareto**, où
+environ 20 % des produits concentrent 70 % des lignes, ce qui donne son sens à la
+segmentation RFM ; et un **profil horaire** avec un pic en soirée.
 
 ## 3.6 Le nettoyage et les contrôles
 
@@ -526,18 +491,7 @@ hiérarchie des catégories, exprimée en SQL par une clé étrangère réflexiv
 ici aplatie en deux colonnes : CQL n'a pas d'équivalent de la requête récursive.
 C'est une perte d'expressivité que la phase 1 assumait sans difficulté.
 
-## 4.4 Les anti-patterns écartés
-
-J'ai envisagé puis écarté trois modélisations alternatives. Les mentionner me
-paraît plus utile que de ne présenter que la solution retenue.
-
-| Choix envisagé | Pourquoi il est mauvais |
-|---|---|
-| Partitionner par `order_date` | toutes les commandes d'une même journée se retrouvent au même endroit, qui encaisse seul les écritures du jour. |
-| Partitionner par `order_status` | six valeurs distinctes seulement, donc six partitions énormes et très déséquilibrées. |
-| Index secondaire sur `customer_id` | un index secondaire Cassandra n'a pas le comportement d'un index SQL : la lecture doit parcourir toute la table au lieu de viser une partition. |
-
-## 4.5 Le type utilisateur `order_item`
+## 4.4 Le type utilisateur `order_item`
 
 ```cql
 items list<frozen<order_item>>
@@ -554,7 +508,7 @@ valeur. Pour modifier une seule ligne de commande, il faut donc réécrire la li
 entière. C'est acceptable ici parce qu'**une commande passée ne change plus** ;
 ce serait un mauvais choix pour une donnée mise à jour souvent.
 
-## 4.6 Le chargement
+## 4.5 Le chargement
 
 Le chargeur (`pipeline/phase2_cassandra/load_json.py`) ne connaît aucune
 connexion Oracle : il lit `data/json/`. C'est ce qui rend l'exécution séquentielle
@@ -580,23 +534,14 @@ au nombre de lignes écrites. Un `COUNT(*)` sans clé de partition est précisé
 le balayage que tout le modèle cherche à éviter : c'est acceptable pour un
 contrôle ponctuel, jamais en usage courant.
 
-## 4.7 Ce que le modèle fait perdre
+## 4.6 Ce que le modèle fait perdre
 
-Un modèle NoSQL orienté requêtes a un coût, qu'il serait malhonnête de passer
-sous silence.
-
-L'**intégrité référentielle** disparaît : il n'y a plus aucune clé étrangère. Si
-un nom de produit change, les commandes passées gardent l'ancien. Ici c'est
-voulu, puisque c'est de l'historisation, mais plus rien ne l'impose
-techniquement. Les **requêtes imprévues** deviennent coûteuses : toute question
-non anticipée exige une nouvelle table et un rechargement, là où en SQL il aurait
-suffi d'écrire une requête. La **cohérence entre les copies** n'est plus
-automatique, puisque la même commande existe dans deux tables et qu'une écriture
-partielle peut les désynchroniser : il faut des contrôles applicatifs, ce qui
-explique les comptages du chargeur et le traceur présenté en section 7. Enfin les
-**analyses transverses** ne sont pas le terrain de ce modèle, une agrégation non
-ciblée pouvant balayer toute la table. C'est exactement le vide que la phase
-suivante vient combler.
+Ce modèle a un coût, qu'il faut savoir énoncer. L'**intégrité référentielle**
+disparaît, puisqu'il n'y a plus aucune clé étrangère. Les **requêtes imprévues**
+deviennent coûteuses : toute question non anticipée demande une nouvelle table et
+un rechargement. La **cohérence entre les deux copies** d'une commande n'est plus
+automatique et doit être vérifiée par le code. Et les **analyses transverses** ne
+sont pas le terrain de ce modèle : c'est le vide que la phase suivante comble.
 
 ---
 
@@ -672,53 +617,33 @@ que `panier_moyen`, puisque le dénominateur compte toutes les commandes du mois
 ## 5.4 La segmentation RFM
 
 Récence, Fréquence, Montant : la segmentation client classique, et l'endroit du
-projet où les données servent enfin à répondre à une question de gestion.
+projet où les données répondent enfin à une question de gestion. Six segments en
+sortent : Champions, Fidèles, Nouveaux, À reconquérir, Endormis, À surveiller.
 
 Les trois mesures sont converties en scores de 1 à 5 **par quintiles**
-(`ntile(5)`) et non par seuils fixes. La conséquence est importante : la
-segmentation devient indépendante de la devise, du volume et de la période. Elle
-reste valable si le jeu de données change d'échelle, là où des seuils écrits en
-dur seraient à re-régler.
-
-Deux détails de mise en œuvre :
-
-- **la récence est inversée.** Peu de jours écoulés depuis le dernier achat est
-  un bon signe, donc un score élevé : d'où le `6 - score` ;
-- **la date de référence est la dernière commande observée**, pas la date du
-  jour. Sinon la segmentation vieillirait toute seule entre le calcul et la
-  consultation du tableau de bord, et tous les clients glisseraient
-  progressivement vers « endormis » sans que rien n'ait changé.
-
-Six segments en sortent : Champions, Fidèles, Nouveaux, À reconquérir, Endormis,
-À surveiller.
+(`ntile(5)`) et non par seuils fixes, ce qui rend la segmentation indépendante de
+l'échelle des données. Deux détails de mise en œuvre : la **récence est
+inversée**, car peu de jours depuis le dernier achat est un bon signe, d'où le
+`6 - score` ; et la **date de référence est la dernière commande observée**, pas
+la date du jour, sinon tous les clients glisseraient peu à peu vers « endormis »
+sans que rien n'ait changé.
 
 Deux propriétés expliquent des écarts de comptage visibles plus loin. Le
-regroupement porte sur le **seul** `customer_id` : y ajouter le pays ou le niveau
-de fidélité serait tentant, mais il suffirait qu'un client ait commandé depuis
-deux pays pour qu'il apparaisse en deux lignes, segmenté sur des achats
-fractionnés. Et la segmentation ne couvre que les clients ayant généré du chiffre
-d'affaires, un client dont toutes les commandes sont annulées n'ayant pas de
-récence exploitable : l'index Elasticsearch des clients contient donc nettement
-moins de documents que la table `customers` d'Oracle : 3 439 contre 5 000 sur
-l'exécution de référence.
-
-La table de faits est enfin mise en cache (`.cache()`) parce qu'elle est relue
-par cinq traitements successifs ; les transformations Spark étant paresseuses,
-sans cache la lecture Cassandra serait rejouée cinq fois.
+regroupement porte sur le **seul** `customer_id` : y ajouter le pays suffirait à
+faire apparaître en deux lignes un client ayant commandé depuis deux pays. Et la
+segmentation ne couvre que les clients ayant généré du chiffre d'affaires, d'où
+3 439 clients segmentés pour 5 000 inscrits.
 
 ## 5.5 Pourquoi Parquet
 
-Quatre propriétés, qui se complètent. **Colonnaire** : une requête qui ne lit que
-`net_amount` et `year_month` ne lit que ces deux colonnes sur le disque, là où
-JSON et CSV imposent de parcourir chaque ligne entière pour en extraire deux
-champs. **Compressé** : les valeurs d'une même colonne sont homogènes, donc très
-compressibles ; j'ai retenu `snappy` plutôt que `gzip`, car elle décompresse
-beaucoup plus vite pour un taux à peine moindre, le bon arbitrage pour un format
-destiné à être relu souvent. **Typé** : le schéma est embarqué dans le fichier,
-sans réinterprétation d'une date ou d'un montant à chaque lecture, contrairement
-au CSV, et les montants sont en `decimal(14,2)`. **Filtrable** : chaque fichier
-porte les valeurs minimale et maximale de ses colonnes, ce qui permet d'écarter
-un fichier entier sans même l'ouvrir.
+Quatre propriétés. **Colonnaire** : une requête qui ne porte que sur deux
+colonnes ne lit que ces deux colonnes, là où JSON et CSV imposent de parcourir
+chaque ligne entière. **Compressé** : les valeurs d'une même colonne sont
+homogènes, donc très compressibles ; j'ai retenu `snappy`, qui décompresse plus
+vite que `gzip` pour un taux à peine moindre. **Typé** : le schéma est dans le
+fichier, et les montants sont en `decimal(14,2)`. **Filtrable** : chaque fichier
+porte les valeurs minimale et maximale de ses colonnes, ce qui permet d'en
+écarter un sans l'ouvrir.
 
 Le partitionnement suit la même logique que le bucketing temporel de Cassandra,
 appliquée cette fois au système de fichiers :
@@ -790,13 +715,11 @@ Le principe retenu est simple : **le mapping est déclaré, jamais deviné.**
 | `byte` / `short` | `order_month`, `line_no`, scores RFM | le domaine est connu et petit |
 | `date` | `order_date`, `derniere_commande` | permet les histogrammes temporels de Kibana |
 
-Deux réglages du mapping méritent un mot. **`dynamic: strict`** fait échouer
-l'indexation d'un champ non déclaré au lieu de l'accepter silencieusement : une
-colonne ajoutée en amont sans mise à jour du mapping se voit immédiatement,
-plutôt que d'apparaître trois semaines plus tard sous un type aberrant.
-**`number_of_replicas: 0`** parce que sur une installation à un seul nœud une
-réplique ne peut être placée nulle part, et l'index resterait indéfiniment en
-état `yellow`.
+Deux réglages complètent le mapping. **`dynamic: strict`** fait échouer
+l'indexation d'un champ non déclaré au lieu de l'accepter en silence, ce qui rend
+visible immédiatement une colonne ajoutée en amont. Et
+**`number_of_replicas: 0`**, parce que sur une seule machine une réplique ne peut
+être placée nulle part.
 
 ## 6.4 Des identifiants dérivés des clés métier
 
@@ -841,19 +764,13 @@ Huit panneaux, choisis pour répondre aux questions d'un responsable e-commerce 
 | Statuts de commande | barres | combien de lignes par statut ? |
 | Segmentation RFM | barres | à qui ai-je affaire ? |
 
-Trois précautions de lecture, qu'il vaut mieux énoncer que laisser deviner : le
-CA net correspond aux articles après remise, hors frais de port ; le compteur de
-commandes facturées utilise `unique_count`, qui est une **estimation** du nombre
-de valeurs distinctes et non un comptage exact ; le graphique des statuts compte
-des **lignes de commande**, pas des commandes distinctes, et ne donne donc pas
-directement un taux d'annulation par commande.
+Trois précautions de lecture : le CA net porte sur les articles après remise,
+hors frais de port ; le compteur de commandes utilise `unique_count`, qui est une
+**estimation** et non un comptage exact ; et le graphique des statuts compte des
+**lignes de commande**, pas des commandes.
 
-Deux détails de conception, enfin. La vue de données des clients n'a
-volontairement **pas** de champ temporel : la segmentation est un état à
-l'instant du calcul, pas une série temporelle, et lui en donner un soumettrait le
-panneau au sélecteur de période et le viderait dès que l'utilisateur restreint la
-fenêtre. Et `timeRestore` est actif, ce qui enregistre la fenêtre des vingt-cinq derniers
-mois avec le tableau de bord. Sans cela, Kibana l'ouvre sur « les quinze
+Un dernier réglage : la fenêtre de temps des vingt-cinq derniers mois est
+enregistrée avec le tableau de bord. Sans cela, Kibana l'ouvre sur « les quinze
 dernières minutes » et tous les panneaux apparaissent vides.
 
 ---
@@ -883,11 +800,10 @@ indexation Elasticsearch 21,8 s.
 L'écart entre 60 000 commandes générées et 59 723 documents extraits n'est pas une
 perte : ce sont les 277 commandes sans aucune ligne, écartées par la jointure
 interne de la requête d'extraction et mesurées indépendamment sur Oracle.
-L'égalité `60 000 − 277 = 59 723` est **vérifiée**, ce qui est très différent de
-constater un écart et de l'expliquer après coup. Les comptages exacts varient par
-ailleurs d'une exécution à l'autre, la fenêtre de vingt-quatre mois se terminant
-au jour de l'exécution ; ce qui ne varie pas, et qui seul importe, ce sont les
-égalités.
+L'égalité `60 000 − 277 = 59 723` est **vérifiée**, ce qui est différent de
+constater un écart et de l'expliquer après coup. Les comptages exacts varient
+d'une exécution à l'autre, la fenêtre de vingt-quatre mois se terminant au jour
+de l'exécution ; seules les égalités ne varient pas.
 
 ## 7.2 Les sept contrôles de cohérence
 
@@ -953,57 +869,40 @@ est appliquée de bout en bout, pas qu'elle soit la bonne.
 
 # 8. Difficultés rencontrées
 
-Je consacre une section à ces incidents parce qu'ils ont, plus que le reste,
-orienté la forme finale du projet.
+Ces incidents ont orienté la forme finale du projet plus que le reste.
 
 **L'installation de PySpark.** `pip install pyspark` échouait sur
-`AttributeError: install_layout`, une incompatibilité entre setuptools et le
-`setup.py` de PySpark 3.5, dont le message n'oriente pas vers la cause. Le
-contournement, documenté dans le README, consiste à épingler setuptools puis à
-désactiver l'isolation de build.
+`AttributeError: install_layout`, une incompatibilité avec les versions récentes
+de setuptools. Le contournement est documenté dans le README.
 
-**La version de Java.** Spark 3.5 est officiellement supporté sur Java 8, 11 et
-17, et j'ai vérifié que 21 fonctionne également. Avec Java 25, que le Codespace
-fournit par défaut, Spark échoue sur des erreurs internes à la JVM dont le
-message ne renvoie pas à la cause. Le script de phase 3 détecte donc la version
-courante, cherche un JDK compatible et force `JAVA_HOME` ; s'il n'en trouve
-aucun, il s'arrête en affichant la commande d'installation plutôt que de laisser
-Spark échouer dans le vide.
+**La version de Java.** Spark 3.5 est supporté sur Java 8, 11 et 17, et j'ai
+vérifié que 21 fonctionne. Avec Java 25, que le Codespace fournit par défaut,
+Spark échoue sur des erreurs dont le message ne renvoie pas à la cause. Le script
+de phase 3 détecte la version, cherche un JDK compatible et force `JAVA_HOME`.
 
-**Les 143 fichiers de 46 Ko.** L'écriture partitionnée de Spark produit un fichier
-par partition d'exécution **et** par répertoire. Comme la lecture Cassandra est
-elle-même découpée en plusieurs morceaux, j'obtenais 143 fichiers pour 24
-répertoires. Une redistribution sur les colonnes de partitionnement, juste avant
-l'écriture, ramène le résultat à un fichier par répertoire. Le gain ne se limite
-pas au nombre de fichiers : la table de faits est passée de 6,6 Mo à 4,9 Mo, soit
-**25 % de moins pour exactement les mêmes données**, la compression de Parquet
-étant d'autant plus efficace que les fichiers sont gros.
+**Les 143 fichiers de 46 Ko.** L'écriture partitionnée produit un fichier par
+morceau de lecture **et** par répertoire, d'où 143 fichiers pour 24 répertoires.
+Une redistribution sur les colonnes de partitionnement, juste avant l'écriture,
+ramène le résultat à un fichier par répertoire. La table de faits est passée de
+6,6 Mo à 4,9 Mo, soit **25 % de moins pour les mêmes données**.
 
-**Un client compté deux fois dans la segmentation RFM.** C'est le test qui l'a
-trouvé, pas la lecture du code. Le regroupement incluait initialement le pays et
-le niveau de fidélité en plus de l'identifiant client ; il suffisait qu'un client
-ait commandé depuis deux pays pour apparaître en deux lignes, chacune segmentée
-sur une moitié de ses achats. Le total du chiffre d'affaires restait juste, si bien
-que les contrôles de volumétrie ne voyaient rien. C'est pour ce genre d'erreur
-que les transformations sont écrites comme des fonctions testables une par
-une.
+**Un client compté deux fois dans la segmentation RFM.** C'est un test qui l'a
+trouvé, pas la lecture du code. Le regroupement incluait le pays et le niveau de
+fidélité : un client ayant commandé depuis deux pays apparaissait en deux lignes.
+Le total du chiffre d'affaires restait juste, donc les contrôles de volumétrie ne
+voyaient rien. C'est pour ce genre d'erreur que les transformations sont écrites
+comme des fonctions testables une par une.
 
 **L'import du tableau de bord Kibana.** L'API d'import groupé renvoyait une
-erreur 500 sans détail exploitable. J'ai remplacé l'appel groupé par une création
-objet par objet, ce qui isole l'objet fautif et rend l'erreur lisible. Le script
-crée par ailleurs les vues de données **avant** de tenter le tableau de bord : en
-cas d'échec, celui-ci reste constructible à la main dans l'interface, puis
-réexportable vers le dépôt.
+erreur 500 sans détail. Je l'ai remplacée par une création objet par objet, ce
+qui isole l'objet fautif et rend l'erreur lisible.
 
 **Deux pannes silencieuses côté conteneurs.** Elasticsearch refuse de démarrer si
-`vm.max_map_count` est inférieur à 262 144, et le défaut d'un Codespace est très
-en dessous ; l'échec se produit **après** le démarrage du conteneur, si bien qu'on
-ne voit qu'un conteneur qui s'arrête tout seul, sans explication. Le script de
-phase 4 applique désormais le réglage automatiquement. De même, après une mise en
-veille du Codespace, Cassandra apparaissait démarré mais son port CQL n'acceptait
-plus de connexion, et la phase 3 échouait : les scripts attendent maintenant
-l'état `healthy` défini par les `healthcheck` du Compose, avec un délai
-d'attente explicite, plutôt qu'une temporisation fixe.
+`vm.max_map_count` est trop bas, et l'échec arrive **après** le démarrage : on ne
+voit qu'un conteneur qui s'arrête seul. Le script de phase 4 applique le réglage.
+De même, après une mise en veille du Codespace, Cassandra semblait démarré mais
+n'acceptait plus de connexion : les scripts attendent maintenant l'état `healthy`
+du conteneur plutôt qu'un délai fixe.
 
 ---
 
