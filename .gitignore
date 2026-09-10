@@ -216,3 +216,14 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Projet
+.env
+data/
+*.log
+spark-warehouse/
+metastore_db/
+derby.log
+
+# Journaux d execution locaux
+logs-*.txt
