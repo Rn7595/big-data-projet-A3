@@ -30,12 +30,17 @@
 
 ## 1.1 Ce qui était demandé
 
-L'énoncé impose une chaîne complète en quatre étapes : construire une source de
-données **SQL sous Oracle** avec une structure normalisée ; **dénormaliser** ces
-données et les extraire vers **Cassandra** en passant par un fichier JSON ;
-**formater** le résultat pour Spark ou Parquet en y appliquant des fonctions
-d'analyse en Python ; enfin **indexer** dans Elasticsearch et exposer le résultat
-dans **Kibana**. Le thème métier est libre.
+L'énoncé impose une chaîne en quatre étapes :
+
+1. construire une source de données **SQL sous Oracle**, avec une structure
+   normalisée ;
+2. **dénormaliser** ces données et les extraire vers **Cassandra**, en passant
+   par un fichier JSON ;
+3. **formater** le résultat pour Spark ou Parquet, avec des fonctions d'analyse
+   en Python ;
+4. **indexer** dans Elasticsearch et exposer le résultat dans **Kibana**.
+
+Le thème métier est libre.
 
 L'enchaînement ne consiste pas seulement à empiler quatre technologies. Les
 mêmes données traversent quatre modèles de stockage qui n'ont pas le même but :
@@ -51,10 +56,11 @@ un catalogue de produits organisé en rayons, et des commandes composées de
 plusieurs lignes.
 
 Ce thème contient les trois formes de relation qui rendent l'exercice
-intéressant : une relation 1-N entre un client et ses commandes ; une relation
-1-N à cardinalité variable entre une commande et ses lignes, exactement ce qu'une
-base orientée documents sait absorber et qu'une base relationnelle doit éclater ;
-et une hiérarchie réflexive dans les catégories, sans équivalent direct en CQL.
+intéressant. Un client a plusieurs commandes, c'est la relation 1-N classique.
+Une commande a un nombre variable de lignes, et c'est exactement ce qu'une base
+orientée documents sait absorber alors qu'une base relationnelle doit l'éclater
+dans une table à part. Enfin les catégories forment une hiérarchie réflexive,
+qui n'a pas d'équivalent direct en CQL.
 
 ## 1.3 La contrainte d'exécution
 
@@ -260,11 +266,15 @@ génération permet en outre d'injecter délibérément les défauts que l'étap
 nettoyage doit corriger, et la graine aléatoire (`SEED=42`) rend le jeu
 reproductible, ce qui autorise à comparer les comptages d'une phase à l'autre.
 
-Le générateur injecte volontairement trois propriétés, chacune pour une raison en
-aval : une **saisonnalité mensuelle**, avec un pic en novembre-décembre, sans
-laquelle la courbe du tableau de bord serait plate ; une **loi de Pareto**, où
-environ 20 % des produits concentrent 70 % des lignes, ce qui donne son sens à la
-segmentation RFM ; et un **profil horaire** avec un pic en soirée.
+Le générateur injecte volontairement trois propriétés, chacune pour une raison
+en aval :
+
+- une **saisonnalité mensuelle**, avec un pic en novembre-décembre. Sans elle, la
+  courbe du tableau de bord serait plate ;
+- une **loi de Pareto** : environ 20 % des produits concentrent 70 % des lignes.
+  C'est ce déséquilibre qui donne son sens à la segmentation RFM ;
+- un **profil horaire** avec un pic en soirée, qui rend l'histogramme par heure
+  exploitable.
 
 ## 3.6 Le nettoyage et les contrôles
 
@@ -326,10 +336,10 @@ chaîne échappée et le document deviendrait inutilisable. Enfin les agrégats
 schéma Oracle, sont matérialisés ici, à l'écriture.
 
 Le format de sortie est du **JSON Lines**, un document complet par ligne, et non
-un unique tableau JSON. La différence est pratique : le fichier se lit en flux
-sans être chargé en mémoire, il se découpe trivialement puisque l'unité est la
-ligne, et une interruption ne corrompt que la dernière ligne au lieu d'invalider
-tout le document. C'est aussi le format que Spark lit nativement en parallèle.
+un unique tableau JSON. La différence est pratique. Le fichier se lit en flux,
+sans être chargé en mémoire. Il se découpe facilement, puisque l'unité est la
+ligne. Et une interruption n'abîme que la dernière ligne au lieu d'invalider tout
+le fichier. C'est aussi le format que Spark lit nativement en parallèle.
 
 Voici la structure d'un document produit. Les identifiants et les libellés
 ci-dessous sont des valeurs d'illustration, pas une ligne réelle du fichier :
@@ -404,10 +414,10 @@ partition est hachée et désigne le nœud qui détient la donnée, tandis que l
 colonnes de clustering fixent l'ordre de tri **sur le disque** à l'intérieur de
 la partition.
 
-Deux conséquences pratiques gouvernent toute la modélisation : une lecture
-**doit** fournir la clé de partition complète, faute de quoi Cassandra doit
-interroger tous les nœuds ; et un tri obtenu par la clé de clustering ne coûte
-rien à l'exécution, puisqu'il est déjà inscrit dans l'ordre physique des lignes.
+Deux conséquences gouvernent toute la modélisation. D'abord, une lecture **doit**
+fournir la clé de partition complète, sinon Cassandra doit interroger tous les
+nœuds. Ensuite, un tri obtenu par la clé de clustering ne coûte rien à
+l'exécution : il est déjà inscrit dans l'ordre physique des lignes.
 
 ## 4.3 Les quatre tables
 
@@ -456,18 +466,17 @@ PRIMARY KEY ((category_id, year_month), order_date, order_id, line_no)
 C'est le point le plus intéressant du modèle, parce que la clé de partition y est
 composite.
 
-Partitionner par la seule `category_id` donnerait 32 partitions qui grossiraient
-indéfiniment au fil des mois, jusqu'à ce qu'une catégorie populaire dépasse la
-limite pratique : c'est l'**anti-pattern de la partition non bornée**, le plus
-fréquent en modélisation Cassandra, et il ne se voit pas sur un jeu de
-démonstration — il se voit deux ans après la mise en production.
+Partitionner par la seule `category_id` donnerait 32 partitions qui
+grossiraient indéfiniment au fil des mois. Au bout d'un moment, une catégorie
+populaire dépasse la taille raisonnable. C'est l'**anti-pattern de la partition
+non bornée**. Le piège est qu'il ne se voit pas sur un jeu de démonstration : il
+se voit deux ans après la mise en production.
 
-Ajouter le mois dans la clé de partition est un **bucketing temporel** : la
-partition est bornée par construction puisqu'elle ne contient qu'un mois, et le
-nombre de partitions croît avec le temps, ce qui est le comportement souhaitable
-d'un système distribué, la charge se répartissant sur de nouveaux nœuds au lieu de
-s'accumuler sur les mêmes. Effet secondaire recherché, la requête métier porte
-justement sur un couple (catégorie, mois) : elle lit une partition et une seule.
+Ajouter le mois dans la clé règle le problème. Chaque partition ne contient
+qu'un mois, donc sa taille est bornée par construction. C'est le nombre de
+partitions qui augmente avec le temps, et non leur taille. Autre avantage, la
+requête métier porte justement sur un couple (catégorie, mois) : elle lit une
+partition et une seule.
 
 La granularité retenue est la ligne de commande et non la commande, si bien
 qu'une commande touchant trois catégories alimente trois partitions différentes.
@@ -518,9 +527,9 @@ Oracle tourne encore.
 Deux choix techniques méritent d'être justifiés.
 
 **Pas de `BatchStatement`.** C'est un réflexe venu du SQL, et une mauvaise idée
-ici : un batch Cassandra sert à garantir l'atomicité à l'intérieur d'une
-partition, ce n'est pas un outil de performance, et il devient plus lent que les
-écritures individuelles dès qu'il touche plusieurs partitions. J'utilise
+ici. Un batch Cassandra sert à garantir l'atomicité dans une partition, ce n'est
+pas un outil de performance. Dès qu'il touche plusieurs partitions, il devient
+même plus lent que des écritures séparées. J'utilise
 `execute_concurrent_with_args`, qui envoie soixante-quatre requêtes en
 parallèle.
 
@@ -605,14 +614,16 @@ Les colonnes calendaires (`order_year`, `order_month`, `order_dow`,
 Cassandra aurait imposé de les écrire pour chaque ligne, les dériver ici coûte un
 seul balayage.
 
-Un mot sur la définition des indicateurs mensuels, parce que l'ambiguïté est
-facile. Dans `agg_sales_by_month`, le chiffre d'affaires porte sur les articles
-après remise, hors frais de port, pour les trois statuts retenus, tandis que les
-commandes, articles et clients sont comptés **tous statuts confondus** : ils
-décrivent l'activité, pas la recette. Les noms de colonnes ont été choisis en
-conséquence — `nb_lignes_sans_ca` plutôt que `nb_lignes_annulees`, puisque le
-compte inclut aussi les commandes en attente, et `ca_moyen_par_commande` plutôt
-que `panier_moyen`, puisque le dénominateur compte toutes les commandes du mois.
+Un mot sur les indicateurs mensuels, parce que l'ambiguïté est facile. Dans
+`agg_sales_by_month`, le chiffre d'affaires ne compte que les trois statuts
+retenus, sur les articles après remise et hors frais de port. En revanche les
+commandes, articles et clients sont comptés **tous statuts confondus**. Ces
+derniers décrivent l'activité, pas la recette.
+
+J'ai nommé les colonnes en conséquence. `nb_lignes_sans_ca` plutôt que
+`nb_lignes_annulees`, parce que le compte inclut aussi les commandes en attente.
+Et `ca_moyen_par_commande` plutôt que `panier_moyen`, parce que le dénominateur
+compte toutes les commandes du mois.
 
 ## 5.4 La segmentation RFM
 
@@ -622,11 +633,12 @@ sortent : Champions, Fidèles, Nouveaux, À reconquérir, Endormis, À surveille
 
 Les trois mesures sont converties en scores de 1 à 5 **par quintiles**
 (`ntile(5)`) et non par seuils fixes, ce qui rend la segmentation indépendante de
-l'échelle des données. Deux détails de mise en œuvre : la **récence est
-inversée**, car peu de jours depuis le dernier achat est un bon signe, d'où le
-`6 - score` ; et la **date de référence est la dernière commande observée**, pas
-la date du jour, sinon tous les clients glisseraient peu à peu vers « endormis »
-sans que rien n'ait changé.
+l'échelle des données.
+
+Deux détails de mise en œuvre. La **récence est inversée** : peu de jours depuis
+le dernier achat est un bon signe, d'où le `6 - score`. Et la **date de référence
+est la dernière commande observée**, pas la date du jour. Sinon tous les clients
+glisseraient peu à peu vers « endormis » sans que rien n'ait changé.
 
 Deux propriétés expliquent des écarts de comptage visibles plus loin. Le
 regroupement porte sur le **seul** `customer_id` : y ajouter le pays suffirait à
@@ -764,10 +776,13 @@ Huit panneaux, choisis pour répondre aux questions d'un responsable e-commerce 
 | Statuts de commande | barres | combien de lignes par statut ? |
 | Segmentation RFM | barres | à qui ai-je affaire ? |
 
-Trois précautions de lecture : le CA net porte sur les articles après remise,
-hors frais de port ; le compteur de commandes utilise `unique_count`, qui est une
-**estimation** et non un comptage exact ; et le graphique des statuts compte des
-**lignes de commande**, pas des commandes.
+Trois précautions de lecture :
+
+- le CA net porte sur les articles après remise, hors frais de port ;
+- le compteur de commandes utilise `unique_count`, qui donne une **estimation**
+  et non un comptage exact ;
+- le graphique des statuts compte des **lignes de commande**, pas des commandes
+  distinctes.
 
 Un dernier réglage : la fenêtre de temps des vingt-cinq derniers mois est
 enregistrée avec le tableau de bord. Sans cela, Kibana l'ouvre sur « les quinze
@@ -861,9 +876,9 @@ contrôle a joué exactement le rôle attendu, sur un incident que je n'aurais p
 vu autrement.
 
 Enfin, ces contrôles vérifient des égalités de volumétrie et de montant. Ils ne
-vérifient pas champ par champ que chaque document est correct, et ils ne valident
-pas la pertinence des règles métier retenues : ils garantissent que la même règle
-est appliquée de bout en bout, pas qu'elle soit la bonne.
+regardent pas chaque document champ par champ. Et ils ne disent rien de la
+pertinence des règles métier : ils garantissent que la même règle est appliquée
+d'un bout à l'autre, pas qu'elle soit la bonne.
 
 ---
 
@@ -940,16 +955,18 @@ justifier dans une enveloppe de 16 Go.
 
 # 10. Conclusion
 
-Le pipeline demandé est complet et fonctionne de bout en bout : une base Oracle
-normalisée en troisième forme normale, une extraction dénormalisée en JSON Lines
-produite par Oracle lui-même, un modèle Cassandra construit à partir des requêtes
-plutôt que des entités, un formatage Spark vers Parquet partitionné avec des
-analyses en Python, et une indexation Elasticsearch exposée dans un tableau de
-bord Kibana de huit panneaux, le tout dans 16 Go grâce à une exécution
-strictement séquentielle. Sur l'exécution de référence, les 149 300 lignes de
-commande se retrouvent identiques aux quatre étapes, l'écart entre commandes
-générées et documents extraits est intégralement expliqué, et le chiffre
-d'affaires calculé par Spark est retrouvé au centime par Elasticsearch.
+Le pipeline demandé est complet et fonctionne de bout en bout. La base Oracle est
+en troisième forme normale. L'extraction dénormalisée est produite par Oracle
+lui-même, en JSON Lines. Le modèle Cassandra est construit à partir des requêtes
+et non des entités. Spark écrit du Parquet partitionné et calcule les analyses en
+Python. Elasticsearch indexe le tout, et Kibana l'expose dans un tableau de bord
+de huit panneaux. Le tout tient dans 16 Go, grâce à une exécution strictement
+séquentielle.
+
+Sur l'exécution de référence, les 149 300 lignes de commande sont identiques aux
+quatre étapes. L'écart entre commandes générées et documents extraits est
+intégralement expliqué. Et le chiffre d'affaires calculé par Spark est retrouvé
+au centime par Elasticsearch.
 
 Ce que je retiens surtout, c'est que la contrainte des 16 Go m'a aidé à concevoir
 le projet. Comme je ne pouvais pas avoir deux bases allumées en même temps, j'ai
